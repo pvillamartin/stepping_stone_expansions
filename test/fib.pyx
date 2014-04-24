@@ -7,3 +7,4 @@ def fib(n):
         print b,
         a, b = b, a + b
     print 'wakwakwawkakwakwkwa'
+    print 'testetestestetestsetset'
