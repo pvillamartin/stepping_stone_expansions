@@ -2,8 +2,6 @@ __author__ = 'bryan'
 
 cimport numpy as np
 
-from libc.stdlib cimport rand, RAND_MAX
-
 cdef class Individual:
 
     cdef readonly long allele_id
@@ -28,8 +26,8 @@ cdef class Deme:
         cdef int to_reproduce
         cdef int to_die
 
-        to_reproduce = <int>(self.num_members*rand()/RAND_MAX)
-        to_die = <int>(self.num_members*rand()/RAND_MAX)
+        to_reproduce = np.random.randint(self.num_members)
+        to_die = np.random.randint(self.num_members)
         # Update allele array
         self.binned_alleles[self.members[to_die].allele_id] -= 1
         self.binned_alleles[self.members[to_reproduce].allele_id] += 1
