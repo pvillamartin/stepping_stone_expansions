@@ -5,11 +5,11 @@ from Cython.Build import cythonize
 extensions = [
     Extension("range_expansions", sources=["range_expansions.pyx"],
               extra_compile_args=['-O2']),
-    Extension("random_cython", sources=["cpp/random_cython.cpp"],
+    Extension("random_cython", sources=["random_cython.cpp"],
               language="c++",
               extra_compile_args=['-std=c++11', '-O2']),
-    Extension("tests", sources=['test/*.pyx'],
-              language='c++',
+        Extension("random_test", sources=["random_test.pyx"],
+              language="c++",
               extra_compile_args=['-std=c++11', '-O2'])
 ]
 
