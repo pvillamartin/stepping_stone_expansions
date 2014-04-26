@@ -1,6 +1,7 @@
 __author__ = 'bryan'
 
 cimport numpy as np
+import numpy as np
 
 cdef class Individual:
 
