@@ -1,11 +1,19 @@
 from distutils.core import setup
 from distutils.extension import Extension
-from Cython.Distutils import build_ext
+from Cython.Build import cythonize
+
+extensions = [
+    Extension("range_expansions", sources=["range_expansions.pyx"],
+              extra_compile_args=['-O2']),
+    Extension("random_cython", sources=["cpp/random_cython.cpp"],
+              language="c++",
+              extra_compile_args=['-std=c++11', '-O2']),
+    Extension("tests", sources=['test/*.pyx'],
+              language='c++',
+              extra_compile_args=['-std=c++11', '-O2'])
+]
 
 setup(
-    cmdclass = {'build_ext': build_ext},
-    ext_modules = [
-        Extension("range_expansions", ["range_expansions.pyx"], language="c",
-                  extra_compile_args=['-O2'])
-    ]
+    name="Range Expansions",
+    ext_modules = cythonize(extensions)
 )
