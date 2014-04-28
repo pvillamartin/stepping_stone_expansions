@@ -3,13 +3,17 @@ from distutils.extension import Extension
 from Cython.Build import cythonize
 
 extensions = [
-    Extension("range_expansions", sources=["range_expansions.pyx"],
+    # Extension("src/range_expansions", sources=["src/range_expansions.pyx"],
+    #           extra_compile_args=['-O2']),
+    # Extension("src/random_cython", sources=["src/random_cython.cpp"],
+    #           language="c++",
+    #           extra_compile_args=['-std=c++11', '-O2']),
+    # Extension("src/random_cython_pyx", sources=["src/random_test_def.pxd"],
+    #           language="c++",
+    #           extra_compile_args=['-std=c++11', '-O2'])
+    Extension("range_expansions", sources=["src/range_expansions.pyx"], language="c",
               extra_compile_args=['-O2']),
-    Extension("random_cython", sources=["cpp/random_cython.cpp"],
-              language="c++",
-              extra_compile_args=['-std=c++11', '-O2']),
-    Extension("tests", sources=['test/*.pyx'],
-              language='c++',
+    Extension("random_test", sources=["src/random_test.pyx", "src/random_cython.cpp"], language="c++",
               extra_compile_args=['-std=c++11', '-O2'])
 ]
 
