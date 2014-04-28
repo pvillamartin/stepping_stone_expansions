@@ -1,6 +1,6 @@
 __author__ = 'bryan'
 
-from random_test import py_uniform_random
+from random_cython_port import py_uniform_random
 import numpy as np
 
 muffin = np.random.rand()*10**6

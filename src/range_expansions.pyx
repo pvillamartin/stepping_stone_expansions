@@ -2,6 +2,10 @@ __author__ = 'bryan'
 
 cimport numpy as np
 import numpy as np
+cimport random_cython_port
+from random_cython_port cimport py_uniform_random
+import random
+import sys
 
 cdef class Individual:
 
@@ -11,11 +15,14 @@ cdef class Individual:
         self.allele_id = allele_id
 
 cdef class Deme:
+# Assumes population in each deme is fixed!
+# Otherwise random number generator breaks down.
 
     cdef readonly Individual[:] members
     cdef readonly long num_alleles
     cdef readonly long[:] binned_alleles
     cdef readonly long num_members
+    cdef py_uniform_random r
 
     def __init__(Deme self,  long num_alleles, Individual[:] members):
         self.members = members
@@ -23,19 +30,28 @@ cdef class Deme:
         self.num_alleles = num_alleles
         self.binned_alleles = self.bin_alleles()
 
+        cdef double seed
+
+        seed = random.randint(0, sys.maxint)
+
+        self.r = py_uniform_random(0, self.num_members - 1, seed)
+
     cdef reproduce(Deme self):
         cdef int to_reproduce
         cdef int to_die
 
-        to_reproduce = np.random.randint(self.num_members)
-        to_die = np.random.randint(self.num_members)
+        to_reproduce = self.r.get_random()
+        to_die = self.r.get_random()
         # Update allele array
         self.binned_alleles[self.members[to_die].allele_id] -= 1
         self.binned_alleles[self.members[to_reproduce].allele_id] += 1
         # Update the members
-        self.members[to_die] = self.members[to_reproduce]
+        # This is a little silly, i.e. doing this in two steps, but
+        # it doesn't seem to work otherwise
+        cdef Individual reproducer = self.members[to_reproduce]
+        self.members[to_die] = reproducer
 
-    cdef get_alleles(Deme self):
+    cpdef get_alleles(Deme self):
         return [individual.allele_id for individual in self.members]
 
     cdef bin_alleles(Deme self):
