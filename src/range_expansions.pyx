@@ -6,6 +6,7 @@ cimport random_cython_port
 from random_cython_port cimport py_uniform_random
 import random
 import sys
+import graph_tool as gt
 
 cdef class Individual:
 
@@ -106,4 +107,72 @@ def simulate_deme(Deme deme, long num_generations=100):
         history[i, :] = deme.binned_alleles
         deme.reproduce()
 
+    return fractional_generation, history
+
+def simulate_deme_line(int num_demes = 10, long num_individuals=100,
+                       long num_alleles=2, long num_generations=100, long m_swap=10):
+
+    cdef int i
+    cdef Individual[:] ind_list
+    cdef Deme d
+
+    deme_list = []
+
+    for i in range(num_demes):
+        ind_list = np.array([Individual(i) for i in np.random.randint(low=0, high=num_alleles, size=num_individuals)])
+        d = Deme(num_alleles, ind_list, m_swap)
+        deme_list.append(d)
+
+    # We assume m is the same for each deme, each deme has the same population,
+    # and that there is a known finite number of alleles at the start
+
+    cdef long num_iterations
+    cdef double[:] fractional_generation
+    cdef long[:, :, :] history
+
+    num_iterations = num_generations * num_individuals + 1
+    fractional_generation = np.empty(num_iterations, dtype=np.float)
+    history = np.empty((num_demes, num_iterations, num_alleles), dtype=np.long)
+
+    # On each swap, you swap one with both of your neighbors
+    # The generation time is set by the number of members
+    # This should be an integer!
+    cdef long swap_every = 2*num_individuals / m_swap
+
+    cdef long[:] iterations = np.arange(num_iterations)
+
+    # Create the desired network structure
+    g = gt.Graph(directed=False)
+
+    vertices = g.add_vertex(num_demes)
+    # Make sure there are no double links, or you will swap twice!
+    for i in range(num_demes):
+        if i ==0:
+            g.add_edge(g.vertex(0), g.vertex(num_demes - 1))
+        else:
+            g.add_edge(g.vertex(i), g.vertex(i-1))
+
+    deme_map = g.new_vertex_property("object")
+    for i in range(num_demes):
+        deme_map[g.vertex(i)] = deme_list[i]
+
+    # We now iterate over the deme map instead of the typical deme list
+    cdef int d_num
+    cdef long[:] current_alleles
+
+    for i in iterations:
+        fractional_generation[i] = float(i)/num_individuals
+        for d_num in range(num_demes):
+            current_alleles = deme_list[d_num].binned_alleles
+            history[d_num, i, :] = current_alleles
+            deme_list[d_num].reproduce()
+        if np.mod(i + 1, swap_every) == 0:
+            # Swap between all the neighbors once choosing the order randomly
+            swap_order = np.random.permutation(num_demes)
+            for swap_index in swap_order:
+                current_vertex = g.vertex(swap_index)
+                neighbors = current_vertex.all_neighbours()
+                for n in neighbors:
+                    deme_map[current_vertex].swap_members(deme_map[n])
+    # Check that gene frequencies are correct!
     return fractional_generation, history

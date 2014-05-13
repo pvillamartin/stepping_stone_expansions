@@ -2,7 +2,7 @@ __author__ = 'bryan'
 
 import numpy as np
 import matplotlib
-matplotlib.use('qt4agg')
+matplotlib.use('Qt4Agg')
 import matplotlib.pyplot as plt
 import range_expansions as re
 import seaborn as sns
