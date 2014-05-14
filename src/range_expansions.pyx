@@ -1,5 +1,3 @@
-# cython: profile=True
-
 __author__ = 'bryan'
 
 cimport numpy as np

@@ -7,13 +7,11 @@ import matplotlib.pyplot as plt
 import range_expansions as re
 import skimage as ski
 import skimage.io
-import cProfile
 
 num_demes = 200
 num_individuals = 100
-num_generations = 400
+num_generations = 10
 m_swap = 50
-
 
 frac_gen, history = re.simulate_deme_line(num_demes=num_demes, num_individuals=num_individuals,
                                           num_alleles=2, m_swap = m_swap, num_generations=num_generations)
