@@ -9,12 +9,13 @@ import skimage as ski
 import skimage.io
 
 num_demes = 200
-num_individuals = 100
-num_generations = 10
-m_swap = 50
+num_individuals = 500
+num_generations = 200
+m_swap = 10
 
 frac_gen, history = re.simulate_deme_line(num_demes=num_demes, num_individuals=num_individuals,
-                                          num_alleles=2, m_swap = m_swap, num_generations=num_generations)
+                                          num_alleles=2, m_swap = m_swap, num_generations=num_generations,
+                                          debug=True)
 
 # Generate a picture of all the demes
 
@@ -27,5 +28,5 @@ for i in range(num_demes):
     cur_history = history[i, 1::num_individuals, :]
     pixels[:, i] = cur_history[:,0]/float(num_individuals)
 
-ski.io.imshow(pixels)
+ski.io.imshow(pixels, origin='lower')
 plt.show()
