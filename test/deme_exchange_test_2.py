@@ -5,11 +5,29 @@ import matplotlib
 matplotlib.use('qt4agg')
 import matplotlib.pyplot as plt
 import range_expansions as re
-import seaborn as sns
+import skimage as ski
+import skimage.io
+import cProfile
 
-frac_gen, history = re.simulate_deme_line(num_demes=100, num_individuals=100, num_alleles=3, m_swap = 10)
+num_demes = 200
+num_individuals = 100
+num_generations = 400
+m_swap = 50
 
-# Generate a scatterplot of all the demes
 
-plt.plot(frac_gen, history[0, :, :])
+frac_gen, history = re.simulate_deme_line(num_demes=num_demes, num_individuals=num_individuals,
+                                          num_alleles=2, m_swap = m_swap, num_generations=num_generations)
+
+# Generate a picture of all the demes
+
+frac_gen = np.asarray(frac_gen)
+history = np.asarray(history)
+
+pixels = np.empty((len(frac_gen)/num_individuals, num_demes))
+
+for i in range(num_demes):
+    cur_history = history[i, 1::num_individuals, :]
+    pixels[:, i] = cur_history[:,0]/float(num_individuals)
+
+ski.io.imshow(pixels)
 plt.show()
