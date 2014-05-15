@@ -9,9 +9,9 @@ import skimage as ski
 import skimage.io
 
 num_demes = 200
-num_individuals = 500
-num_generations = 200
-m_swap = 10
+num_individuals = 100
+num_generations = 600
+m_swap = 90
 
 frac_gen, history = re.simulate_deme_line(num_demes=num_demes, num_individuals=num_individuals,
                                           num_alleles=2, m_swap = m_swap, num_generations=num_generations,

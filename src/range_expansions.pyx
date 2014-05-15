@@ -170,7 +170,7 @@ def simulate_deme_line(int num_demes = 10, long num_individuals=100,
             history[d_num, i, :] = current_alleles
             tempDeme = deme_list[d_num]
             tempDeme.reproduce()
-        if (i + 1 % swap_every) == 0:
+        if ((i + 1) % swap_every) == 0:
             # Swap between all the neighbors once choosing the order randomly
             swap_order = np.random.permutation(num_demes)
             for swap_index in swap_order:
