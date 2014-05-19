@@ -23,16 +23,16 @@ cdef class Deme:
     cdef readonly long num_alleles
     cdef readonly long[:] binned_alleles
     cdef readonly long num_members
-    cdef readonly long m_swap
+    cdef readonly double fraction_swap
     cdef py_uniform_random r
     cdef public Deme[:] neighbors
 
-    def __init__(Deme self,  long num_alleles, Individual[:] members,int m_swap=0):
+    def __init__(Deme self,  long num_alleles, Individual[:] members, double fraction_swap = 0.0):
         self.members = members
         self.num_members = len(members)
         self.num_alleles = num_alleles
         self.binned_alleles = self.bin_alleles()
-        self.m_swap = m_swap
+        self.fraction_swap = fraction_swap
 
         cdef double seed
         seed = random.randint(0, sys.maxint)
@@ -112,7 +112,9 @@ def simulate_deme(Deme deme, long num_generations=100):
     return fractional_generation, history
 
 def simulate_deme_line(int num_demes = 10, long num_individuals=100,
-                       long num_alleles=2, long num_generations=100, long m_swap=10, bool debug=False):
+                       long num_alleles=2, long num_generations=100, double fraction_swap=0.1, bool debug=False):
+    '''Fraction_swap gives 1/number of iterations that you swap, or specifically the fraction of the population that you swap each
+    generation.'''
 
     cdef int i
     cdef Individual[:] ind_list
@@ -122,7 +124,7 @@ def simulate_deme_line(int num_demes = 10, long num_individuals=100,
 
     for i in range(num_demes):
         ind_list = np.array([Individual(i) for i in np.random.randint(low=0, high=num_alleles, size=num_individuals)])
-        d = Deme(num_alleles, ind_list, m_swap)
+        d = Deme(num_alleles, ind_list, fraction_swap)
         temp_deme_list.append(d)
 
     cdef Deme[:] deme_list = np.array(temp_deme_list, dtype=Deme)
@@ -141,10 +143,11 @@ def simulate_deme_line(int num_demes = 10, long num_individuals=100,
     # On each swap, you swap one with both of your neighbors
     # The generation time is set by the number of members
     # This should be an integer!
-    cdef long swap_every = 2*num_individuals / m_swap
+    cdef long swap_counter
 
     cdef long[:] iterations = np.arange(num_iterations, dtype=long)
 
+    # Set up the network structure
     for i in range(num_demes):
         if i ==0:
             deme_list[i].neighbors = np.array([deme_list[num_demes - 1], deme_list[1]], dtype=Deme)
@@ -153,31 +156,72 @@ def simulate_deme_line(int num_demes = 10, long num_individuals=100,
         else:
             deme_list[i].neighbors = np.array([deme_list[i -1], deme_list[i+1]], dtype=Deme)
 
-    cdef int d_num
-    cdef long[:] current_alleles
-    cdef Deme current_deme
-    cdef Deme[:] neighbors
-    cdef Deme n
-    cdef Deme tempDeme
 
-    cdef long swap_index
-    cdef long[:] swap_order
+    def swap_with_neighbors():
+        cdef long swap_index
+        cdef long[:] swap_order
+        cdef Deme current_deme
+        cdef Deme[:] neighbors
+        cdef Deme n
 
-    for i in iterations:
-        fractional_generation[i] = float(i)/num_individuals
+        # Swap between all the neighbors once choosing the order randomly
+        swap_order = np.random.permutation(num_demes)
+        for swap_index in swap_order:
+            current_deme = deme_list[swap_index]
+            neighbors = current_deme.neighbors
+            for n in neighbors:
+                current_deme.swap_members(n)
+
+    def reproduce():
+        cdef int d_num
+        cdef long[:] current_alleles
+        cdef Deme tempDeme
+
         for d_num in range(num_demes):
             current_alleles = deme_list[d_num].binned_alleles
             history[d_num, i, :] = current_alleles
             tempDeme = deme_list[d_num]
             tempDeme.reproduce()
-        if ((i + 1) % swap_every) == 0:
-            # Swap between all the neighbors once choosing the order randomly
-            swap_order = np.random.permutation(num_demes)
-            for swap_index in swap_order:
-                current_deme = deme_list[swap_index]
-                neighbors = current_deme.neighbors
-                for n in neighbors:
-                    current_deme.swap_members(n)
+
+    cdef double swap_every
+    if fraction_swap == 0:
+        swap_every = -1.0
+    else:
+        swap_every = 1.0/fraction_swap
+
+    cdef long swap_count = 0
+    cdef long num_times_swapped = 0
+    cdef double remainder = 0
+
+    for i in iterations:
+        # Bookkeeping
+        fractional_generation[i] = (<float> i)/num_individuals
+        swap_count += 1 # So at the start of the loop this has a minimum of 1
+
+        # Reproduce
+        reproduce()
+
+        # Swap when appropriate
+
+        if swap_every >= 1: # Swap less frequently than reproduction
+            if swap_count >= swap_every:
+                swap_count = 0
+                num_times_swapped += 1
+                swap_with_neighbors()
+
+        elif swap_every > 0: # Swap more frequently than reproduction
+            while swap_count <= swap_every:
+                swap_with_neighbors()
+                swap_count += 1
+                num_times_swapped += 1
+
+            remainder += swap_count - swap_every
+            swap_count = 0
+            if remainder >= 1:
+                remainder -= 1
+                swap_with_neighbors()
+                num_times_swapped += 1
+
     # Check that gene frequencies are correct!
 
     cdef long num_correct = 0
