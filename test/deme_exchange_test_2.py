@@ -9,7 +9,7 @@ import skimage as ski
 import skimage.io
 
 num_demes = 400
-num_individuals = 10
+num_individuals = 50
 num_generations = 400
 fraction_swap = 0.5
 num_alleles = 2
