@@ -9,6 +9,7 @@ from random_cython_port cimport py_uniform_random
 import random
 import sys
 from libcpp cimport bool
+import pandas as pd
 
 cdef class Individual:
 
@@ -253,3 +254,28 @@ cdef class Simulate_Deme_Line:
             self.history[d_num, i, :] = current_alleles
             tempDeme = self.deme_list[d_num]
             tempDeme.reproduce()
+
+    def count_sectors(Simulate_Deme_Line self, double cutoff = 0.1):
+        '''Run this after the simulation has concluded to count the number of sectors'''
+        # All you have to do is to count what the current domain type is and when it changes.
+        # This is complicated by the fact that everything is fuzzy and that there can be
+        # multiple colors.
+        cdef int i
+
+        df = pd.Dataframe()
+
+        for i in range(self.deme_list.shape[0]):
+
+            data_dict = {}
+
+            current_alleles = self.deme_list[i].binned_alleles
+            allele_frac = current_alleles / self.num_individuals
+            dominant_sectors = allele_frac > cutoff
+
+            data_dict['deme_index'] = [i]
+            data_dict['dominant_sectors'] = dominant_sectors
+
+            temp_df = pd.Dataframe(data_dict)
+            df = df.append(temp_df)
+
+        return df
