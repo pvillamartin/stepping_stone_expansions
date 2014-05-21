@@ -10,17 +10,17 @@ import skimage.io
 
 num_demes = 400
 num_individuals = 50
-num_generations = 400
-fraction_swap = 0.5
+num_generations = 200
+fraction_swap = 0.1
 num_alleles = 2
 
 simulation = re.Simulate_Deme_Line(num_demes=num_demes, num_individuals=num_individuals,
-                                          num_alleles=num_alleles, fraction_swap = fraction_swap, num_generations=num_generations,
-                                          debug=True)
+                                   num_alleles=num_alleles, fraction_swap = fraction_swap, num_generations=num_generations,
+                                   debug=True)
 # Generate a picture of all the demes
 
-frac_gen = simulation.fractional_generation
-history = np.asarray(history)
+frac_gen = np.asarray(simulation.fractional_generation)
+history = np.asarray(simulation.history)
 
 pixels = np.empty((len(frac_gen)/num_individuals, num_demes))
 

@@ -46,6 +46,7 @@ cdef class Deme:
         cdef int to_reproduce
         cdef int to_die
 
+
         to_reproduce = self.r.get_random()
         to_die = self.r.get_random()
         # Update allele array
@@ -126,7 +127,7 @@ cdef class Simulate_Deme_Line:
     cdef readonly double fraction_swap
     cdef readonly bool debug
 
-    def __init__(Simulate_Deme_Line self, long num_demes=100, long num_individuals=100, long num_alleles=2, \
+    def __init__(Simulate_Deme_Line self, long num_demes=100, long num_individuals=100, long num_alleles=2,
         long num_generations=100, double fraction_swap=0.1, bool debug = False):
 
         #### Set the properties of the simulation ###
@@ -165,8 +166,6 @@ cdef class Simulate_Deme_Line:
         # This should be an integer!
         cdef long swap_counter
 
-        cdef long[:] iterations = np.arange(num_iterations, dtype=long)
-
         # Set up the network structure
         for i in range(num_demes):
             if i ==0:
@@ -186,7 +185,7 @@ cdef class Simulate_Deme_Line:
         cdef long num_times_swapped = 0
         cdef double remainder = 0
 
-        for i in iterations:
+        for i in range(num_iterations):
             # Bookkeeping
             self.fractional_generation[i] = (<float> i)/num_individuals
             swap_count += 1 # So at the start of the loop this has a minimum of 1
@@ -236,13 +235,15 @@ cdef class Simulate_Deme_Line:
 
         # Swap between all the neighbors once choosing the order randomly
         swap_order = np.random.permutation(self.num_demes)
-        for swap_index in swap_order:
-            current_deme = self.deme_list[swap_index]
+        cdef int i
+        cdef int j
+        for i in range(swap_order.shape[0]):
+            current_deme = self.deme_list[swap_order[i]]
             neighbors = current_deme.neighbors
-            for n in neighbors:
-                current_deme.swap_members(n)
+            for j in range(neighbors.shape[0]):
+                current_deme.swap_members(neighbors[j])
 
-    def reproduce(Simulate_Deme_Line self, long i):
+    cdef reproduce(Simulate_Deme_Line self, long i):
         cdef int d_num
         cdef long[:] current_alleles
         cdef Deme tempDeme
