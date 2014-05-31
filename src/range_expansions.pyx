@@ -10,6 +10,8 @@ import random
 import sys
 from libcpp cimport bool
 import pandas as pd
+from matplotlib import animation
+import matplotlib.pyplot as plt
 
 cdef class Individual:
 
@@ -140,6 +142,12 @@ cdef class Simulate_Deme_Line:
         self.fraction_swap = fraction_swap
         self.debug = debug
 
+        cdef double invalid_length
+
+        if self.debug:
+            invalid_length = np.sqrt(self.fraction_swap * self.num_individuals * self.num_generations)
+            print 'Invalid length from walls is ~' , invalid_length
+
         temp_deme_list = []
 
         cdef int i
@@ -167,14 +175,10 @@ cdef class Simulate_Deme_Line:
         # This should be an integer!
         cdef long swap_counter
 
-        # Set up the network structure
-        for i in range(num_demes):
-            if i ==0:
-                self.deme_list[i].neighbors = np.array([self.deme_list[num_demes - 1], self.deme_list[1]], dtype=Deme)
-            if i==num_demes - 1:
-                self.deme_list[i].neighbors = np.array([self.deme_list[num_demes - 2], self.deme_list[0]], dtype=Deme)
-            else:
-                self.deme_list[i].neighbors = np.array([self.deme_list[i -1], self.deme_list[i+1]], dtype=Deme)
+        # Set up the network structure; make sure not to double count!
+        # Also do not create a circle, just create a line
+        for i in range(num_demes - 1):
+            self.deme_list[i].neighbors = np.array([self.deme_list[i + 1]], dtype=Deme)
 
         cdef double swap_every
         if fraction_swap == 0:
@@ -186,6 +190,9 @@ cdef class Simulate_Deme_Line:
         cdef long num_times_swapped = 0
         cdef double remainder = 0
 
+        # Only useful when you swap more than once per iteration
+        cdef double num_times_to_swap = 1.0/swap_every
+
         for i in range(num_iterations):
             # Bookkeeping
             self.fractional_generation[i] = (<float> i)/num_individuals
@@ -195,7 +202,6 @@ cdef class Simulate_Deme_Line:
             self.reproduce(i)
 
             # Swap when appropriate
-
             if swap_every >= 1: # Swap less frequently than reproduction
                 if swap_count >= swap_every:
                     swap_count = 0
@@ -203,12 +209,13 @@ cdef class Simulate_Deme_Line:
                     self.swap_with_neighbors()
 
             elif swap_every > 0: # Swap more frequently than reproduction
-                while swap_count <= swap_every:
+                while swap_count <= num_times_to_swap:
                     self.swap_with_neighbors()
                     swap_count += 1
                     num_times_swapped += 1
 
-                remainder += swap_count - swap_every
+                #swap_count will always be too high as you just exited the for loop
+                remainder += num_times_to_swap - (swap_count - 1)
                 swap_count = 0
                 if remainder >= 1:
                     remainder -= 1
@@ -226,8 +233,13 @@ cdef class Simulate_Deme_Line:
                     print 'Incorrect allele frequencies!'
             print 'Num correct:' , num_correct, 'out of', len(self.deme_list)
 
+            # Check number of times swapped
+            print 'Fraction swapped:' , num_times_swapped / float(self.num_generations*self.num_individuals)
+            print 'Desired fraction:' , self.fraction_swap
+
 
     cdef swap_with_neighbors(Simulate_Deme_Line self):
+        '''Be careful not to double swap! Each deme swaps once per edge.'''
         cdef long[:] swap_order
         cdef long swap_index
         cdef Deme current_deme
@@ -262,20 +274,43 @@ cdef class Simulate_Deme_Line:
         # multiple colors.
         cdef int i
 
-        df = pd.Dataframe()
+        data_list = []
 
         for i in range(self.deme_list.shape[0]):
 
-            data_dict = {}
-
-            current_alleles = self.deme_list[i].binned_alleles
+            current_alleles = np.asarray(self.deme_list[i].binned_alleles)
             allele_frac = current_alleles / self.num_individuals
             dominant_sectors = allele_frac > cutoff
 
-            data_dict['deme_index'] = [i]
-            data_dict['dominant_sectors'] = dominant_sectors
+            data_list.append(dominant_sectors)
 
-            temp_df = pd.Dataframe(data_dict)
-            df = df.append(temp_df)
+        return np.array(data_list)
 
-        return df
+    def animate(Simulate_Deme_Line self, generation_spacing = 1, interval = 1):
+        '''Animates at the desired generation spacing using matplotlib'''
+        history = np.asarray(self.history)
+        # Only get data for every generation
+        history_pieces = history[:, ::self.num_individuals, :]
+
+        # Set up canvas to be plotted
+        fig = plt.figure()
+        ax = plt.axes(xlim = (0, self.num_demes), ylim = (0, 1))
+        line, = ax.plot([], [])
+
+        # Begin plotting
+
+        x_values = np.arange(self.num_demes)
+        fractional_pieces = history_pieces / float(self.num_individuals)
+
+        num_frames = self.num_generations / generation_spacing
+
+        def init():
+            line.set_data(x_values, fractional_pieces[:, 0, 0])
+            return line,
+
+        def animate_frame(i):
+            line.set_data(x_values, fractional_pieces[:, generation_spacing * i, 0])
+            return line,
+
+        return animation.FuncAnimation(fig, animate_frame, blit=True, init_func = init,
+                                       frames=num_frames, interval=interval)

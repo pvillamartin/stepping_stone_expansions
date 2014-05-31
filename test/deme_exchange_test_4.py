@@ -8,10 +8,10 @@ import range_expansions as re
 import skimage as ski
 import skimage.io
 
-num_demes = 200
-num_individuals = 50
-num_generations = 200
-fraction_swap = 0.1
+num_demes = 500
+num_individuals = 10
+num_generations = 500
+fraction_swap = 50
 num_alleles = 2
 
 simulation = re.Simulate_Deme_Line(num_demes=num_demes, num_individuals=num_individuals,
@@ -30,3 +30,7 @@ for i in range(num_demes):
 
 ski.io.imshow(pixels, origin='lower')
 plt.show()
+
+#sectors = simulation.count_sectors()
+
+#print sectors
