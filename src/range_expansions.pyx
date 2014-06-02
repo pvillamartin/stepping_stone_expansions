@@ -27,13 +27,13 @@ cdef class Deme:
 
     cdef readonly Individual[:] members
     cdef readonly long num_alleles
-    cdef readonly long[:] binned_alleles
+    cdef readonly np.ndarray[long, ndim=1] binned_alleles
     cdef readonly long num_members
     cdef readonly double fraction_swap
     cdef py_uniform_random r
-    cdef public Deme[:] neighbors
+    cdef public np.ndarray[object, ndim=1] neighbors
 
-    def __init__(Deme self,  long num_alleles, Individual[:] members, double fraction_swap = 0.0):
+    def __init__(Deme self,  long num_alleles, np.ndarray[object, ndim=1] members, double fraction_swap = 0.0):
         self.members = members
         self.num_members = len(members)
         self.num_alleles = num_alleles
