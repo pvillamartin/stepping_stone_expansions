@@ -163,7 +163,7 @@ cdef class Simulate_Deme_Line:
         self.deme_list = np.array(temp_deme_list, dtype=Deme)
 
         input_dict = {}
-        input_dict['demes'] = np.asarray(self.deme_list)
+        input_dict['deme'] = np.asarray(self.deme_list)
         positions = np.arange(self.num_demes) - self.num_demes / 2
         input_dict['position'] = positions
 
