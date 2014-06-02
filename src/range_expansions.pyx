@@ -31,9 +31,11 @@ cdef class Deme:
     cdef readonly double fraction_swap
     cdef py_uniform_random r
     cdef public Deme[:] neighbors
+    cdef readonly double[:] position
 
-    def __init__(Deme self,  long num_alleles, Individual[:] members, double fraction_swap = 0.0):
+    def __init__(Deme self,  long num_alleles, Individual[:] members, double[:] position, double fraction_swap = 0.0):
         self.members = members
+        self.position = position
         self.num_members = len(members)
         self.num_alleles = num_alleles
         self.binned_alleles = self.bin_alleles()
@@ -154,9 +156,17 @@ cdef class Simulate_Deme_Line:
         cdef Individual[:] ind_list
         cdef Deme d
 
+        # To get the coordinate, use a symmetric coordinate system (even number of demes), so
+        # divide number of demes by two, subtract from the deme number.
+
+        position_offset = self.num_demes / 2
+        # In this case, position is just a convenience parameter, but in more complicated
+        # simulations, it is important.
+
         for i in range(num_demes):
-            ind_list = np.array([Individual(i) for i in np.random.randint(low=0, high=num_alleles, size=num_individuals)])
-            d = Deme(num_alleles, ind_list, fraction_swap)
+            ind_list = np.array([Individual(j) for j in np.random.randint(low=0, high=num_alleles, size=num_individuals)])
+            position = np.array([i - position_offset], dtype=np.double)
+            d = Deme(num_alleles, ind_list, position, fraction_swap = fraction_swap)
             temp_deme_list.append(d)
 
         self.deme_list = np.array(temp_deme_list, dtype=Deme)
