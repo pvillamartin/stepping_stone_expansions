@@ -12,6 +12,7 @@ from libcpp cimport bool
 import pandas as pd
 from matplotlib import animation
 import matplotlib.pyplot as plt
+import pandas as pd
 
 cdef class Individual:
 
@@ -31,11 +32,9 @@ cdef class Deme:
     cdef readonly double fraction_swap
     cdef py_uniform_random r
     cdef public Deme[:] neighbors
-    cdef readonly double[:] position
 
-    def __init__(Deme self,  long num_alleles, Individual[:] members, double[:] position, double fraction_swap = 0.0):
+    def __init__(Deme self,  long num_alleles, Individual[:] members, double fraction_swap = 0.0):
         self.members = members
-        self.position = position
         self.num_members = len(members)
         self.num_alleles = num_alleles
         self.binned_alleles = self.bin_alleles()
@@ -123,8 +122,7 @@ cdef class Simulate_Deme_Line:
 
     cdef readonly Deme[:] deme_list
     cdef readonly long[:,:,:] history
-    cdef readonly double[:] fractional_generation
-
+    cdef readonly position_map
     cdef readonly long num_demes
     cdef readonly long num_individuals
     cdef readonly long num_alleles
@@ -156,20 +154,20 @@ cdef class Simulate_Deme_Line:
         cdef Individual[:] ind_list
         cdef Deme d
 
-        # To get the coordinate, use a symmetric coordinate system (even number of demes), so
-        # divide number of demes by two, subtract from the deme number.
-
-        position_offset = self.num_demes / 2
-        # In this case, position is just a convenience parameter, but in more complicated
-        # simulations, it is important.
-
         for i in range(num_demes):
             ind_list = np.array([Individual(j) for j in np.random.randint(low=0, high=num_alleles, size=num_individuals)])
-            position = np.array([i - position_offset], dtype=np.double)
-            d = Deme(num_alleles, ind_list, position, fraction_swap = fraction_swap)
+            d = Deme(num_alleles, ind_list, fraction_swap = fraction_swap)
             temp_deme_list.append(d)
 
+
         self.deme_list = np.array(temp_deme_list, dtype=Deme)
+
+        input_dict = {}
+        input_dict['demes'] = np.asarray(self.deme_list)
+        positions = np.arange(self.num_demes) - self.num_demes / 2
+        input_dict['position'] = positions
+
+        self.position_map = pd.DataFrame(input_dict)
 
         # We assume m is the same for each deme, each deme has the same population,
         # and that there is a known finite number of alleles at the start
@@ -177,13 +175,7 @@ cdef class Simulate_Deme_Line:
         cdef long num_iterations
 
         num_iterations = num_generations * num_individuals + 1
-        self.fractional_generation = np.empty(num_iterations, dtype=np.float)
-        self.history = np.empty((num_demes, num_iterations, num_alleles), dtype=np.long)
-
-        # On each swap, you swap one with both of your neighbors
-        # The generation time is set by the number of members
-        # This should be an integer!
-        cdef long swap_counter
+        self.history = np.empty((num_generations + 1, num_demes, num_alleles), dtype=np.long)
 
         # Set up the network structure; make sure not to double count!
         # Also do not create a circle, just create a line
@@ -202,11 +194,17 @@ cdef class Simulate_Deme_Line:
 
         # Only useful when you swap more than once per iteration
         cdef double num_times_to_swap = 1.0/swap_every
+        cdef int cur_gen
 
         for i in range(num_iterations):
             # Bookkeeping
-            self.fractional_generation[i] = (<float> i)/num_individuals
             swap_count += 1 # So at the start of the loop this has a minimum of 1
+
+            # Record every generation
+            if i % self.num_individuals == 0:
+                cur_gen = i / self.num_individuals
+                for d_num in range(self.num_demes):
+                    self.history[cur_gen, d_num, :] = self.deme_list[d_num].binned_alleles
 
             # Reproduce
             self.reproduce(i)
@@ -272,8 +270,6 @@ cdef class Simulate_Deme_Line:
         cdef Deme tempDeme
 
         for d_num in range(self.num_demes):
-            current_alleles = self.deme_list[d_num].binned_alleles
-            self.history[d_num, i, :] = current_alleles
             tempDeme = self.deme_list[d_num]
             tempDeme.reproduce()
 
