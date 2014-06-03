@@ -292,6 +292,26 @@ cdef class Simulate_Deme_Line:
 
         return np.array(data_list)
 
+    cpdef F_ij(Simulate_Deme_Line self, long i, long j, x1):
+
+        m = self.position_map
+        start_deme_index = m[m['position'] == x1].index[0]
+
+        delta_positions = self.position_map.copy()
+
+        delta_positions['position'] -= x1
+
+        # Now calculate the heterozygosity at each time for each deme which have a
+        # given position
+        fij = np.empty((self.num_generations, self.num_demes))
+
+        frac_history = np.asarray(self.history)/float(self.num_individuals)
+
+        for gen_index in range(self.num_generations):
+            fij[gen_index, :] = frac_history[gen_index, start_deme_index, i] * frac_history[gen_index, :, j]
+
+        return fij, delta_positions
+
     def animate(Simulate_Deme_Line self, generation_spacing = 1, interval = 1):
         '''Animates at the desired generation spacing using matplotlib'''
         history = np.asarray(self.history)
