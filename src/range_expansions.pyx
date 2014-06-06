@@ -13,6 +13,8 @@ import pandas as pd
 from matplotlib import animation
 import matplotlib.pyplot as plt
 import pandas as pd
+import skimage as ski
+import skimage.io
 
 cdef class Individual:
 
@@ -340,3 +342,17 @@ cdef class Simulate_Deme_Line:
 
         return animation.FuncAnimation(fig, animate_frame, blit=True, init_func = init,
                                        frames=num_frames, interval=interval)
+
+    def get_allele_history(Simulate_Deme_Line self, long allele_num):
+
+        history = np.asarray(self.history)
+        fractional_history = history/float(self.num_individuals)
+
+        pixels = np.empty((self.num_generations, self.num_demes))
+
+        cdef int i
+
+        for i in range(self.num_generations):
+            pixels[i, :] = fractional_history[i, :, allele_num]
+
+        return pixels
