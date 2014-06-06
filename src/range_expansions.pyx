@@ -9,12 +9,9 @@ from random_cython_port cimport py_uniform_random
 import random
 import sys
 from libcpp cimport bool
-import pandas as pd
 from matplotlib import animation
 import matplotlib.pyplot as plt
 import pandas as pd
-import skimage as ski
-import skimage.io
 
 cdef class Individual:
 
@@ -180,9 +177,12 @@ cdef class Simulate_Deme_Line:
         self.history = np.empty((num_generations + 1, num_demes, num_alleles), dtype=np.long)
 
         # Set up the network structure; make sure not to double count!
-        # Also do not create a circle, just create a line
-        for i in range(num_demes - 1):
-            self.deme_list[i].neighbors = np.array([self.deme_list[i + 1]], dtype=Deme)
+        # Create periodic or line BC's here, your choice
+        for i in range(num_demes):
+            if i != (num_demes - 1):
+                self.deme_list[i].neighbors = np.array([self.deme_list[i + 1]], dtype=Deme)
+            else:
+                self.deme_list[i].neighbors = np.array([self.deme_list[0]], dtype=Deme)
 
         cdef double swap_every
         if fraction_swap == 0:
