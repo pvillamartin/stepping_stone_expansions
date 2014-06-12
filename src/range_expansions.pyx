@@ -1,5 +1,3 @@
-# cython: profile=True
-
 __author__ = 'bryan'
 
 cimport numpy as np
@@ -48,7 +46,6 @@ cdef class Deme:
     cdef reproduce(Deme self):
         cdef int to_reproduce
         cdef int to_die
-
 
         to_reproduce = self.r.get_random()
         to_die = self.r.get_random()
