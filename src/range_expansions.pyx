@@ -223,6 +223,7 @@ cdef class Simulate_Deme_Line:
         cdef int cur_gen
 
         # Use fast random number generation in mission critical methods
+        # Make sure to delete this at the end to avoid memory leaks...
         cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
 
         for i in range(num_iterations):
@@ -274,6 +275,9 @@ cdef class Simulate_Deme_Line:
             print 'Fraction swapped:' , num_times_swapped / float(self.num_generations*self.num_individuals)
             print 'Desired fraction:' , self.fraction_swap
 
+        # DONE! Deallocate as necessary.
+        gsl_rng_free(r)
+
 
     cdef swap_with_neighbors(Simulate_Deme_Line self, gsl_rng *r):
         '''Be careful not to double swap! Each deme swaps once per edge.'''
@@ -283,22 +287,30 @@ cdef class Simulate_Deme_Line:
         cdef Deme[:] neighbors
         cdef Deme n
 
+        # Create a permutation
+        cdef int N = self.num_demes
+        cdef gsl_permutation * p
+        p = gsl_permutation_alloc (N)
+        gsl_permutation_init (p)
+        gsl_ran_shuffle(r, p.data, N, sizeof(size_t))
+
         # Swap between all the neighbors once choosing the order randomly
-        swap_order = np.random.permutation(self.num_demes)
         cdef int i
         cdef int j
 
         cdef int self_swap_index, other_swap_index
         cdef Deme otherDeme
 
-        for i in range(swap_order.shape[0]):
-            current_deme = self.deme_list[swap_order[i]]
+        for i in range(N):
+            current_deme = self.deme_list[gsl_permutation_get(p, i)]
             neighbors = current_deme.neighbors
-            for j in range(neighbors.shape[0]):
+            for j in range(len(neighbors)):
                 otherDeme = neighbors[j]
                 self_swap_index = gsl_rng_uniform_int(r, current_deme.num_members)
                 other_swap_index = gsl_rng_uniform_int(r, otherDeme.num_members)
                 current_deme.swap_members(otherDeme, self_swap_index, other_swap_index)
+
+        gsl_permutation_free(p)
 
     cdef reproduce(Simulate_Deme_Line self, gsl_rng *r):
         cdef int d_num
