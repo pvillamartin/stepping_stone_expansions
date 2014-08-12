@@ -114,7 +114,6 @@ def simulate_deme(Deme deme, long num_generations=100):
     # Prepare random number generation
 
     gsl_rng_default_seed = 0
-
     cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
 
     cdef unsigned long int to_reproduce
@@ -213,6 +212,9 @@ cdef class Simulate_Deme_Line:
         cdef double num_times_to_swap = 1.0/swap_every
         cdef int cur_gen
 
+        gsl_rng_default_seed = 0
+        cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
+
         for i in range(num_iterations):
             # Bookkeeping
             swap_count += 1 # So at the start of the loop this has a minimum of 1
@@ -224,18 +226,18 @@ cdef class Simulate_Deme_Line:
                     self.history[cur_gen, d_num, :] = self.deme_list[d_num].binned_alleles
 
             # Reproduce
-            self.reproduce(i)
+            self.reproduce(r)
 
             # Swap when appropriate
             if swap_every >= 1: # Swap less frequently than reproduction
                 if swap_count >= swap_every:
                     swap_count = 0
                     num_times_swapped += 1
-                    self.swap_with_neighbors()
+                    self.swap_with_neighbors(r)
 
             elif swap_every > 0: # Swap more frequently than reproduction
                 while swap_count <= num_times_to_swap:
-                    self.swap_with_neighbors()
+                    self.swap_with_neighbors(r)
                     swap_count += 1
                     num_times_swapped += 1
 
@@ -244,7 +246,7 @@ cdef class Simulate_Deme_Line:
                 swap_count = 0
                 if remainder >= 1:
                     remainder -= 1
-                    self.swap_with_neighbors()
+                    self.swap_with_neighbors(r)
                     num_times_swapped += 1
 
         # Check that gene frequencies are correct!
@@ -263,7 +265,7 @@ cdef class Simulate_Deme_Line:
             print 'Desired fraction:' , self.fraction_swap
 
 
-    cdef swap_with_neighbors(Simulate_Deme_Line self):
+    cdef swap_with_neighbors(Simulate_Deme_Line self, gsl_rng *r):
         '''Be careful not to double swap! Each deme swaps once per edge.'''
         cdef long[:] swap_order
         cdef long swap_index
@@ -275,20 +277,31 @@ cdef class Simulate_Deme_Line:
         swap_order = np.random.permutation(self.num_demes)
         cdef int i
         cdef int j
+
+        cdef int self_swap_index, other_swap_index
+        cdef Deme otherDeme
+
         for i in range(swap_order.shape[0]):
             current_deme = self.deme_list[swap_order[i]]
             neighbors = current_deme.neighbors
             for j in range(neighbors.shape[0]):
-                current_deme.swap_members(neighbors[j])
+                otherDeme = neighbors[j]
+                self_swap_index = gsl_rng_uniform_int(r, current_deme.num_members)
+                other_swap_index = gsl_rng_uniform_int(r, otherDeme.num_members)
+                current_deme.swap_members(otherDeme, self_swap_index, other_swap_index)
 
-    cdef reproduce(Simulate_Deme_Line self, long i):
+    cdef reproduce(Simulate_Deme_Line self, gsl_rng *r):
         cdef int d_num
         cdef long[:] current_alleles
         cdef Deme tempDeme
 
+        cdef int to_reproduce, to_die
+
         for d_num in range(self.num_demes):
             tempDeme = self.deme_list[d_num]
-            tempDeme.reproduce()
+            to_reproduce = gsl_rng_uniform_int(r, tempDeme.num_members)
+            to_die = gsl_rng_uniform_int(r, tempDeme.num_members)
+            tempDeme.reproduce(to_reproduce, to_die)
 
     def count_sectors(Simulate_Deme_Line self, double cutoff = 0.1):
         '''Run this after the simulation has concluded to count the number of sectors'''
