@@ -281,36 +281,34 @@ cdef class Simulate_Deme_Line:
 
     cdef swap_with_neighbors(Simulate_Deme_Line self, gsl_rng *r):
         '''Be careful not to double swap! Each deme swaps once per edge.'''
-        cdef long[:] swap_order
-        cdef long swap_index
-        cdef Deme current_deme
-        cdef Deme[:] neighbors
-        cdef Deme n
 
         # Create a permutation
-        cdef int N = self.num_demes
-        cdef gsl_permutation * p
-        p = gsl_permutation_alloc (N)
-        gsl_permutation_init (p)
-        gsl_ran_shuffle(r, p.data, N, sizeof(size_t))
+        # This is actually faster than going to native c, at least cython_gsl,
+        # believe it nor not, likely because there is a better way to wrap the data.
+        # numpy has this down...
+
+        cdef long[:] p = np.random.permutation(self.num_demes)
 
         # Swap between all the neighbors once choosing the order randomly
-        cdef int i
-        cdef int j
 
-        cdef int self_swap_index, other_swap_index
+        cdef int i, j
+
+        cdef Deme current_deme
         cdef Deme otherDeme
+        cdef Deme[:] neighbors
+        cdef int self_swap_index, other_swap_index
 
-        for i in range(N):
-            current_deme = self.deme_list[gsl_permutation_get(p, i)]
+        cdef int num_neighbors
+
+        for i in range(self.num_demes):
+            current_deme = self.deme_list[i]
             neighbors = current_deme.neighbors
-            for j in range(len(neighbors)):
+            num_neighbors = neighbors.shape[0]
+            for j in range(num_neighbors):
                 otherDeme = neighbors[j]
                 self_swap_index = gsl_rng_uniform_int(r, current_deme.num_members)
                 other_swap_index = gsl_rng_uniform_int(r, otherDeme.num_members)
                 current_deme.swap_members(otherDeme, self_swap_index, other_swap_index)
-
-        gsl_permutation_free(p)
 
     cdef reproduce(Simulate_Deme_Line self, gsl_rng *r):
         cdef int d_num
