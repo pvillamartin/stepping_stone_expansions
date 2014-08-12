@@ -9,7 +9,6 @@ __author__ = 'bryan'
 
 cimport numpy as np
 import numpy as np
-cimport random_cython_port
 from random_cython_port cimport py_uniform_random
 import random
 import sys
@@ -17,6 +16,8 @@ from libcpp cimport bool
 from matplotlib import animation
 import matplotlib.pyplot as plt
 import pandas as pd
+
+from cython_gsl cimport *
 
 cdef class Individual:
 
@@ -34,7 +35,6 @@ cdef class Deme:
     cdef readonly long[:] binned_alleles
     cdef readonly long num_members
     cdef readonly double fraction_swap
-    cdef py_uniform_random r
     cdef public Deme[:] neighbors
 
     def __init__(Deme self,  long num_alleles, Individual[:] members not None, double fraction_swap = 0.0):
@@ -50,12 +50,8 @@ cdef class Deme:
         self.r = py_uniform_random(0, self.num_members - 1, seed)
         self.neighbors=None
 
-    cdef reproduce(Deme self):
-        cdef int to_reproduce
-        cdef int to_die
+    cdef reproduce(Deme self, int to_reproduce, int to_die):
 
-        to_reproduce = self.r.get_random()
-        to_die = self.r.get_random()
         # Update allele array
 
         cdef Individual individual_to_die =  self.members[to_die]
@@ -72,16 +68,11 @@ cdef class Deme:
         cdef Individual reproducer = self.members[to_reproduce]
         self.members[to_die] = reproducer
 
-    cdef swap_members(Deme self, Deme other):
+    cdef swap_members(Deme self, Deme other, int self_swap_index, int other_swap_index):
         cdef int i
 
-        cdef int self_swap_index
-        cdef int other_swap_index
         cdef Individual self_swap
         cdef Individual other_swap
-
-        self_swap_index = self.r.get_random()
-        other_swap_index = other.r.get_random()
 
         self_swap = self.members[self_swap_index]
         other_swap = other.members[other_swap_index]
@@ -120,11 +111,24 @@ def simulate_deme(Deme deme, long num_generations=100):
     fractional_generation = np.empty(num_iterations, dtype=np.float)
     history = np.empty((num_iterations, deme.num_alleles), dtype=np.long)
 
+    # Prepare random number generation
+
+    gsl_rng_default_seed = 0
+
+    cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
+
+    cdef unsigned long int to_reproduce
+    cdef unsigned long int to_die
+
     cdef long i
     for i in range(num_iterations):
         fractional_generation[i] = float(i)/deme.num_members
         history[i, :] = deme.binned_alleles
-        deme.reproduce()
+        to_reproduce = gsl_rng_uniform_int(r, deme.num_members)
+        to_die = gsl_rng_uniform_int(r, deme.num_members)
+        deme.reproduce(to_reproduce, to_die)
+
+    gsl_rng_free(r)
 
     return fractional_generation, history
 
