@@ -1,3 +1,10 @@
+#cython: profile=False
+#cython: boundscheck=False
+#cython: initializedcheck=False
+#cython: nonecheck=False
+#cython: wraparound=False
+#cython: cdivision=True
+
 __author__ = 'bryan'
 
 cimport numpy as np
@@ -30,7 +37,7 @@ cdef class Deme:
     cdef py_uniform_random r
     cdef public Deme[:] neighbors
 
-    def __init__(Deme self,  long num_alleles, Individual[:] members, double fraction_swap = 0.0):
+    def __init__(Deme self,  long num_alleles, Individual[:] members not None, double fraction_swap = 0.0):
         self.members = members
         self.num_members = len(members)
         self.num_alleles = num_alleles
@@ -50,8 +57,15 @@ cdef class Deme:
         to_reproduce = self.r.get_random()
         to_die = self.r.get_random()
         # Update allele array
-        self.binned_alleles[self.members[to_die].allele_id] -= 1
-        self.binned_alleles[self.members[to_reproduce].allele_id] += 1
+
+        cdef Individual individual_to_die =  self.members[to_die]
+        cdef Individual individual_to_reproduce = self.members[to_reproduce]
+
+        cdef int allele_to_die = individual_to_die.allele_id
+        cdef int allele_to_reproduce = individual_to_reproduce.allele_id
+
+        self.binned_alleles[allele_to_die] -= 1
+        self.binned_alleles[allele_to_reproduce] += 1
         # Update the members
         # This is a little silly, i.e. doing this in two steps, but
         # it doesn't seem to work otherwise

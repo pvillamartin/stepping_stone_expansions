@@ -11,5 +11,5 @@ extensions = [
 
 setup(
     name="Range Expansions",
-    ext_modules = cythonize(extensions, annotate=True)
+    ext_modules = cythonize(extensions, annotate=True, profile=False)
 )
