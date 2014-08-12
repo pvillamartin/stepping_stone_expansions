@@ -47,7 +47,6 @@ cdef class Deme:
         cdef double seed
         seed = random.randint(0, sys.maxint)
 
-        self.r = py_uniform_random(0, self.num_members - 1, seed)
         self.neighbors=None
 
     cdef reproduce(Deme self, int to_reproduce, int to_die):
@@ -101,10 +100,13 @@ cdef class Deme:
 
         return np.array_equal(self.binned_alleles, self.bin_alleles())
 
-def simulate_deme(Deme deme, long num_generations=100):
+def simulate_deme(Deme deme, long num_generations=100, seed = 0):
     cdef long[:,:] history
     cdef double[:] fractional_generation
     cdef long num_iterations
+
+
+    # Do everything else
 
     num_iterations = num_generations * deme.num_members
 
@@ -112,8 +114,8 @@ def simulate_deme(Deme deme, long num_generations=100):
     history = np.empty((num_iterations, deme.num_alleles), dtype=np.long)
 
     # Prepare random number generation
-
-    gsl_rng_default_seed = 0
+    np.random.seed(seed)
+    gsl_rng_default_seed = seed
     cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
 
     cdef unsigned long int to_reproduce
@@ -142,9 +144,16 @@ cdef class Simulate_Deme_Line:
     cdef readonly long num_generations
     cdef readonly double fraction_swap
     cdef readonly bool debug
+    cdef readonly unsigned long int seed
 
     def __init__(Simulate_Deme_Line self, long num_demes=100, long num_individuals=100, long num_alleles=2,
-        long num_generations=100, double fraction_swap=0.1, bool debug = False):
+        long num_generations=100, double fraction_swap=0.1, bool debug = False, unsigned long int seed=0):
+
+        self.seed = seed
+
+        # Prepare random number seeds
+        np.random.seed(seed)
+        gsl_rng_default_seed = seed
 
         #### Set the properties of the simulation ###
 
@@ -212,7 +221,7 @@ cdef class Simulate_Deme_Line:
         cdef double num_times_to_swap = 1.0/swap_every
         cdef int cur_gen
 
-        gsl_rng_default_seed = 0
+        # Use fast random number generation in mission critical methods
         cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
 
         for i in range(num_iterations):
