@@ -4,6 +4,7 @@
 #cython: nonecheck=False
 #cython: wraparound=False
 #cython: cdivision=True
+#cython: profile=True
 
 __author__ = 'bryan'
 

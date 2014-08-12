@@ -14,5 +14,5 @@ extensions = [
 setup(
     name="Range Expansions",
     include_dirs = [cython_gsl.get_include()],
-    ext_modules = cythonize(extensions, annotate=True, profile=False)
+    ext_modules = cythonize(extensions, annotate=True)
 )
