@@ -114,7 +114,10 @@ def simulate_deme(Deme deme, long num_generations=100, seed = 0):
     history = np.empty((num_iterations, deme.num_alleles), dtype=np.long)
 
     # Prepare random number generation
-    np.random.seed(seed)
+    # This actually can't go here...python random number generation and c random number
+    # generation should actually be done elsewhere...or else disaster will strike if you
+    # are calling the function from python!
+    #np.random.seed(seed)
     gsl_rng_default_seed = seed
     cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
 
