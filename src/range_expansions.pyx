@@ -1,9 +1,9 @@
 #cython: profile=False
-#cython: boundscheck=True
-#cython: initializedcheck=True
+#cython: boundscheck=False
+#cython: initializedcheck=False
 #cython: nonecheck=False
-#cython: wraparound=True
-#cython: cdivision=False
+#cython: wraparound=False
+#cython: cdivision=True
 
 # Things will actually crash if nonecheck is set to true...as neighbors is initially set to none
 
@@ -117,8 +117,8 @@ def simulate_deme(Deme deme, long num_generations=100, unsigned long int seed = 
     num_iterations = num_generations * deme.num_members
     num_to_record = num_iterations/record_every
 
-    fractional_generation = np.empty(num_to_record, dtype=np.double)
-    history = np.empty((num_to_record, deme.num_alleles), dtype=np.long)
+    fractional_generation = np.empty(num_to_record + 1, dtype=np.double)
+    history = np.empty((num_to_record + 1, deme.num_alleles), dtype=np.long)
 
     # Prepare random number generation
 
@@ -141,6 +141,9 @@ def simulate_deme(Deme deme, long num_generations=100, unsigned long int seed = 
         to_reproduce = gsl_rng_uniform_int(r, deme.num_members)
         to_die = gsl_rng_uniform_int(r, deme.num_members)
         deme.reproduce(to_reproduce, to_die)
+
+    fractional_generation[count] = num_iterations/deme.num_members
+    history[count, :] = deme.binned_alleles
 
     gsl_rng_free(r)
 
