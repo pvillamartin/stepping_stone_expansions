@@ -1,9 +1,11 @@
 #cython: profile=False
-#cython: boundscheck=False
-#cython: initializedcheck=False
+#cython: boundscheck=True
+#cython: initializedcheck=True
 #cython: nonecheck=False
-#cython: wraparound=False
-#cython: cdivision=True
+#cython: wraparound=True
+#cython: cdivision=False
+
+# Things will actually crash if nonecheck is set to true...as neighbors is initially set to none
 
 __author__ = 'bryan'
 
@@ -100,34 +102,42 @@ cdef class Deme:
 
         return np.array_equal(self.binned_alleles, self.bin_alleles())
 
-def simulate_deme(Deme deme, long num_generations=100, seed = 0):
+def simulate_deme(Deme deme, long num_generations=100, unsigned long int seed = 0, record_every_fracgen = -1):
     cdef long[:,:] history
     cdef double[:] fractional_generation
     cdef long num_iterations
 
+    if record_every_fracgen == -1:
+        record_every_fracgen = 1./deme.num_members
+
+    # Calculate how many iterations you must wait before recording
+    cdef unsigned int record_every = deme.num_members * record_every_fracgen
 
     # Do everything else
-
     num_iterations = num_generations * deme.num_members
+    num_to_record = num_iterations/record_every
 
-    fractional_generation = np.empty(num_iterations, dtype=np.float)
-    history = np.empty((num_iterations, deme.num_alleles), dtype=np.long)
+    fractional_generation = np.empty(num_to_record, dtype=np.double)
+    history = np.empty((num_to_record, deme.num_alleles), dtype=np.long)
 
     # Prepare random number generation
-    # This actually can't go here...python random number generation and c random number
-    # generation should actually be done elsewhere...or else disaster will strike if you
-    # are calling the function from python!
-    #np.random.seed(seed)
-    gsl_rng_default_seed = seed
+
+    np.random.seed(seed)
+
     cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
+    gsl_rng_set(r, seed)
 
     cdef unsigned long int to_reproduce
     cdef unsigned long int to_die
 
+    cdef unsigned int count = 0
+
     cdef long i
     for i in range(num_iterations):
-        fractional_generation[i] = float(i)/deme.num_members
-        history[i, :] = deme.binned_alleles
+        if (i % record_every) == 0:
+            fractional_generation[count] = float(i)/deme.num_members
+            history[count, :] = deme.binned_alleles
+            count += 1
         to_reproduce = gsl_rng_uniform_int(r, deme.num_members)
         to_die = gsl_rng_uniform_int(r, deme.num_members)
         deme.reproduce(to_reproduce, to_die)
@@ -153,10 +163,6 @@ cdef class Simulate_Deme_Line:
         long num_generations=100, double fraction_swap=0.1, bool debug = False, unsigned long int seed=0):
 
         self.seed = seed
-
-        # Prepare random number seeds
-        np.random.seed(seed)
-        gsl_rng_default_seed = seed
 
         #### Set the properties of the simulation ###
 
@@ -227,6 +233,10 @@ cdef class Simulate_Deme_Line:
         # Use fast random number generation in mission critical methods
         # Make sure to delete this at the end to avoid memory leaks...
         cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
+
+        # Now set seeds
+        np.random.seed(seed)
+        gsl_rng_set(r, seed)
 
         for i in range(num_iterations):
             # Bookkeeping
