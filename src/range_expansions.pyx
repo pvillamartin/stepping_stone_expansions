@@ -11,7 +11,6 @@ __author__ = 'bryan'
 
 cimport numpy as np
 import numpy as np
-from random_cython_port cimport py_uniform_random
 import random
 import sys
 from libcpp cimport bool
