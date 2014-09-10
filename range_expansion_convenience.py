@@ -3,6 +3,9 @@ __author__ = 'bryan'
 import numpy as np
 import range_expansions as re
 import ternary
+import scipy as sp
+
+interpn = sp.interpolate.interpn
 
 def simulate_deme_many_times(initial_condition, num_alleles, num_generations, num_times, record_every_fracgen):
 
@@ -57,12 +60,7 @@ class Simulate_3_Alleles_Deme:
 
         # Collects the data in a convenient way
         self.edges, self.centers = self.get_hist_edges_and_center()
-        self.histogrammed_data = self.get_2d_histogram_in_time()
-
-        self.x_center_mesh, self.y_center_mesh = np.meshgrid(self.centers, self.centers)
-        self.x_rav = self.x_center_mesh.ravel()
-        self.y_rav = self.y_center_mesh.ravel()
-
+        self.histogrammed_data = self.get_3d_histogram_in_time()
 
     def get_hist_edges_and_center(self):
         edges = np.arange(-1./(2*self.num_individuals), 1 + 2 *(1./(2*self.num_individuals)),
@@ -71,16 +69,23 @@ class Simulate_3_Alleles_Deme:
 
         return edges, centers
 
-    def get_2d_histogram_in_time(self):
+    def get_3d_histogram_in_time(self):
         num_bins = self.centers.shape[0]
         num_records = self.frac_gen.shape[0]
-        histogrammed_data = np.empty((num_records, num_bins, num_bins))
+        histogrammed_data = np.empty((num_records, num_bins, num_bins, num_bins))
 
         for i in range(num_records):
-            histogrammed_data[i, :, :] = np.histogram2d(self.sim_list[:, i, 0], self.sim_list[:, i, 1], self.edges)[0]
-            histogrammed_data[i, :, :] /= float(self.num_simulations)
+            histogrammed_data[i, :, :, :] = np.histogramdd(self.sim_list[:, i, :], bins=[self.edges, self.edges, self.edges])[0]
+            histogrammed_data[i, :, :, :] /= float(self.num_simulations)
         return histogrammed_data
 
-    def get_histdict_for_iteration(self, i):
-        hist_rav = self.histogrammed_data[i, :, :].ravel()
-        return dict([((x,y),z) for x,y,z in zip(self.x_rav, self.y_rav, hist_rav)])
+    def interp_histogram_at_iteration(self, iteration, points):
+        # Just returns the nearest neighbor. I use the same grid in python_ternary so no interpolation is done,
+        # this just saves me from having to rewrite EVERYTHING.
+        return interpn((self.centers, self.centers, self.centers),
+        self.histogrammed_data[iteration], points, method='nearest', bounds_error=True)
+
+    def plot_heatmap_at_iteration(self, iteration):
+        '''I line up the actual grid with interpolating grid so there is no interpolation, actually'''
+        ternary.plot_heatmap(lambda x: self.interp_histogram_at_iteration(iteration, x),
+                             steps = self.num_individuals, boundary=True)
