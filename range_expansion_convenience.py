@@ -4,6 +4,7 @@ import numpy as np
 import range_expansions as re
 import ternary
 import scipy as sp
+from matplotlib import pyplot as plt
 
 interpn = sp.interpolate.interpn
 
@@ -85,7 +86,20 @@ class Simulate_3_Alleles_Deme:
         return interpn((self.centers, self.centers, self.centers),
         self.histogrammed_data[iteration], points, method='nearest', bounds_error=True)
 
-    def plot_heatmap_at_iteration(self, iteration):
+    def plot_heatmap_at_iteration(self, iteration, **options):
         '''I line up the actual grid with interpolating grid so there is no interpolation, actually'''
+        ax = plt.subplot()
         ternary.plot_heatmap(lambda x: self.interp_histogram_at_iteration(iteration, x),
-                             steps = self.num_individuals, boundary=True)
+                             steps = self.num_individuals, boundary=True, **options)
+        scale = self.num_individuals
+        ternary.draw_boundary(scale=scale, ax=ax)
+
+        plt.gca().set_aspect('equal', adjustable='box')
+        plt.ylim([-0.13*scale, scale])
+
+        plt.text(.15 * scale, .43*scale, r'$f_1$', fontsize=35 )
+        plt.text(.78 * scale, .43*scale, r'$f_3$', fontsize=35 )
+        plt.text(.46*scale, -0.1*scale, r'$f_2$', fontsize=35)
+        plt.gca().yaxis.set_visible(False)
+        plt.gca().xaxis.set_visible(False)
+        plt.grid(False)
