@@ -87,7 +87,12 @@ class Simulate_3_Alleles_Deme:
         self.histogrammed_data[iteration], points, method='nearest', bounds_error=True)
 
     def plot_heatmap_at_iteration(self, iteration, **options):
-        '''I line up the actual grid with interpolating grid so there is no interpolation, actually'''
+        '''I line up the actual grid with interpolating grid so there is no interpolation, actually.
+
+        Options:
+            min_max_scale: [min, max] of the scale
+            colorbar_decimals: number of decimals used in the colorbar
+        '''
         ax = plt.subplot()
         ternary.plot_heatmap(lambda x: self.interp_histogram_at_iteration(iteration, x),
                              steps = self.num_individuals, boundary=True, **options)
@@ -103,3 +108,8 @@ class Simulate_3_Alleles_Deme:
         plt.gca().yaxis.set_visible(False)
         plt.gca().xaxis.set_visible(False)
         plt.grid(False)
+
+        # Plot the fractional generation
+        generation_formatted = '%.2f' % self.frac_gen[iteration]
+        plt.text(.77*scale, .925*scale, 'Generation: ' + generation_formatted, fontsize=15)
+
