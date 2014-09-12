@@ -38,9 +38,59 @@ def simulate_deme_many_times(initial_condition, num_alleles, num_generations, nu
 
     return sim_list, frac_gen
 
+class Simulate_Arbitrary_Alleles_Deme:
+    '''A convenience class to deal with q color moran models'''
+
+    def __init__(self, initial_condition, num_generations, num_simulations, record_every=None):
+        self.num_alleles = 3
+        self.initial_condition = initial_condition
+        self.num_individuals = initial_condition.shape[0]
+        self.num_generations = num_generations
+        self.num_simulations = num_simulations
+
+        self.record_every = record_every
+        if self.record_every is None:
+            self.record_every = 1./(initial_condition.shape[0])
+
+        # Does the simulation
+
+        self.sim_list, self.frac_gen = simulate_deme_many_times(self.initial_condition, self.num_alleles,
+                                                                self.num_generations, self.num_simulations,
+                                                                self.record_every)
+
+    def get_mean_ij(self, i, j):
+        fifj = self.sim_list[:, :, i] * self.sim_list[:, :, j]
+        Fij = np.mean(fifj, axis=0)
+        return Fij
+
+    def plot_off_diagonals_Fij(self):
+        plt.hold(True)
+        for i in range(self.num_alleles):
+            for j in range(i):
+                plt.plot(self.frac_gen, self.get_mean_ij(i, j),
+                         label=r'$F_{' + str(i) + str(j) + r'}$')
+    plt.hold(False)
+    plt.legend(loc='best')
+
+    def plot_diagonals_Fij(self):
+        plt.hold(True)
+        for i in range(self.num_alleles):
+            plt.plot(self.frac_gen, self.get_mean_ij(i, i),
+                     label=r'$F_{' + str(i) + str(i) + r'}$')
+        plt.hold(False)
+        plt.legend(loc='best')
+
+    def get_heterozygosity(self):
+        Fii_sum = self.get_mean_ij(0, 0)
+        for i in range(1, self.num_alleles):
+            Fii_sum += self.get_mean_ij(i, i)
+        return 1 - Fii_sum
+
 class Simulate_3_Alleles_Deme:
-    '''A convenience class to do 3 color stepping stone models. Also
-        cotains methods to plot the results on a triangle.'''
+    '''A convenience class to do 3 color moran models. Also
+        cotains methods to plot the results on a triangle. '''
+
+    #TODO: Make this extend the above class.
 
     def __init__(self, initial_condition, num_generations, num_simulations, record_every=None):
         self.num_alleles = 3
@@ -111,5 +161,8 @@ class Simulate_3_Alleles_Deme:
 
         # Plot the fractional generation
         generation_formatted = '%.2f' % self.frac_gen[iteration]
-        plt.text(.77*scale, .925*scale, 'Generation: ' + generation_formatted, fontsize=15)
+        textbox = r'$N=' + str(self.num_individuals) + r'$' '\n'
+        textbox += 'Num Simulations: ' + r'$10^' + str(int(np.log10(self.num_simulations))) + r'$' + '\n'
+        textbox += 'Generation: ' + generation_formatted
+        plt.text(.71*scale, .85*scale, textbox, fontsize=15, linespacing=1.75)
 
