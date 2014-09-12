@@ -41,8 +41,8 @@ def simulate_deme_many_times(initial_condition, num_alleles, num_generations, nu
 class Simulate_Arbitrary_Alleles_Deme:
     '''A convenience class to deal with q color moran models'''
 
-    def __init__(self, initial_condition, num_generations, num_simulations, record_every=None):
-        self.num_alleles = 3
+    def __init__(self, initial_condition, num_alleles, num_generations, num_simulations, record_every=None):
+        self.num_alleles = num_alleles
         self.initial_condition = initial_condition
         self.num_individuals = initial_condition.shape[0]
         self.num_generations = num_generations
@@ -69,8 +69,8 @@ class Simulate_Arbitrary_Alleles_Deme:
             for j in range(i):
                 plt.plot(self.frac_gen, self.get_mean_ij(i, j),
                          label=r'$F_{' + str(i) + str(j) + r'}$')
-    plt.hold(False)
-    plt.legend(loc='best')
+        plt.hold(False)
+        plt.legend(loc='best')
 
     def plot_diagonals_Fij(self):
         plt.hold(True)
@@ -85,6 +85,25 @@ class Simulate_Arbitrary_Alleles_Deme:
         for i in range(1, self.num_alleles):
             Fii_sum += self.get_mean_ij(i, i)
         return 1 - Fii_sum
+
+    def plot_heterozygosity(self, **kwargs):
+        hetero = self.get_heterozygosity()
+        plt.plot(self.frac_gen, hetero, **kwargs)
+
+    def plot_heterozygosity_data_collapse(self, **kwargs):
+        hetero = self.get_heterozygosity()
+        # Normalize by IC
+        norm_hetero = hetero / hetero[0]
+        # Rescale time by 1/N
+        rescaled_time = self.frac_gen/self.num_individuals
+
+        legend_str = r'$N=' + str(self.num_individuals) + r'$, $q=' + str(self.num_alleles) + r'$'
+
+        plt.plot(rescaled_time, norm_hetero, '-', label = legend_str, **kwargs)
+        plt.xlabel(r'$\tilde{t}/N$')
+        plt.ylabel(r'$H/H_o$')
+        plt.title('Moran Model: Heterozygosity')
+        plt.legend(loc='best')
 
 class Simulate_3_Alleles_Deme:
     '''A convenience class to do 3 color moran models. Also
