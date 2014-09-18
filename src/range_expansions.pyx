@@ -1,9 +1,9 @@
 #cython: profile=False
-#cython: boundscheck=True
-#cython: initializedcheck=True
+#cython: boundscheck=False
+#cython: initializedcheck=False
 #cython: nonecheck=False
-#cython: wraparound=True
-#cython: cdivision=False
+#cython: wraparound=False
+#cython: cdivision=True
 
 # Things will actually crash if nonecheck is set to true...as neighbors is initially set to none
 
