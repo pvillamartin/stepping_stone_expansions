@@ -1,9 +1,9 @@
 #cython: profile=False
-#cython: boundscheck=False
-#cython: initializedcheck=False
+#cython: boundscheck=True
+#cython: initializedcheck=True
 #cython: nonecheck=False
-#cython: wraparound=False
-#cython: cdivision=True
+#cython: wraparound=True
+#cython: cdivision=False
 
 # Things will actually crash if nonecheck is set to true...as neighbors is initially set to none
 
@@ -160,9 +160,12 @@ cdef class Simulate_Deme_Line:
     cdef readonly double fraction_swap
     cdef readonly bool debug
     cdef readonly unsigned long int seed
+    cdef readonly double record_every
+    cdef readonly double[:] frac_gen
 
     def __init__(Simulate_Deme_Line self, long num_demes=100, long num_individuals=100, long num_alleles=2,
-        long num_generations=100, double fraction_swap=0.1, bool debug = False, unsigned long int seed=0):
+        long num_generations=100, double fraction_swap=0.1, double record_every = 1.0, unsigned long int seed=0,
+        bool debug = False):
 
         self.seed = seed
 
@@ -173,7 +176,12 @@ cdef class Simulate_Deme_Line:
         self.num_alleles = num_alleles
         self.num_generations = num_generations
         self.fraction_swap = fraction_swap
+        self.record_every = record_every
         self.debug = debug
+
+        cdef int num_records = int(self.num_generations / self.record_every) + 1
+
+        self.frac_gen = np.empty(num_records)
 
         cdef double invalid_length
 
@@ -208,7 +216,7 @@ cdef class Simulate_Deme_Line:
         cdef long num_iterations
 
         num_iterations = num_generations * num_individuals + 1
-        self.history = np.empty((num_generations + 1, num_demes, num_alleles), dtype=np.long)
+        self.history = np.empty((num_records, num_demes, num_alleles), dtype=np.long)
 
         # Set up the network structure; make sure not to double count!
         # Create periodic or line BC's here, your choice
@@ -240,15 +248,21 @@ cdef class Simulate_Deme_Line:
         np.random.seed(seed)
         gsl_rng_set(r, seed)
 
+        # Figure out how many iterations you should go before recording
+        cdef int record_every_iter = int(record_every * self.num_individuals)
+
+        cdef int num_times_recorded = 0
+
         for i in range(num_iterations):
             # Bookkeeping
             swap_count += 1 # So at the start of the loop this has a minimum of 1
 
-            # Record every generation
-            if i % self.num_individuals == 0:
-                cur_gen = i / self.num_individuals
+            # Record every "record_every"
+            if (i % record_every_iter == 0) or (i == (num_iterations - 1)):
+                self.frac_gen[num_times_recorded] = float(i) / self.num_individuals
                 for d_num in range(self.num_demes):
-                    self.history[cur_gen, d_num, :] = self.deme_list[d_num].binned_alleles
+                    self.history[num_times_recorded, d_num, :] = self.deme_list[d_num].binned_alleles
+                num_times_recorded += 1
 
             # Reproduce
             self.reproduce(r)

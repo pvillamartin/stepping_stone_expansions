@@ -184,4 +184,3 @@ class Simulate_3_Alleles_Deme:
         textbox += 'Num Simulations: ' + r'$10^' + str(int(np.log10(self.num_simulations))) + r'$' + '\n'
         textbox += 'Generation: ' + generation_formatted
         plt.text(.71*scale, .85*scale, textbox, fontsize=15, linespacing=1.75)
-
