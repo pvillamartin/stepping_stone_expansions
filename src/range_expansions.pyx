@@ -162,8 +162,9 @@ cdef class Simulate_Deme_Line:
     cdef readonly unsigned long int seed
     cdef readonly double record_every
     cdef readonly double[:] frac_gen
+    cdef readonly long[:] initial_condition
 
-    def __init__(Simulate_Deme_Line self, long num_demes=100, long num_individuals=100, long num_alleles=2,
+    def __init__(Simulate_Deme_Line self, long[:] initial_condition, long num_demes=100, long num_alleles=2,
         long num_generations=100, double fraction_swap=0.1, double record_every = 1.0, unsigned long int seed=0,
         bool debug = False):
 
@@ -171,8 +172,11 @@ cdef class Simulate_Deme_Line:
 
         #### Set the properties of the simulation ###
 
+        self.initial_condition = initial_condition
+
         self.num_demes = num_demes
-        self.num_individuals = num_individuals
+
+        self.num_individuals = len(initial_condition)
         self.num_alleles = num_alleles
         self.num_generations = num_generations
         self.fraction_swap = fraction_swap
@@ -195,11 +199,18 @@ cdef class Simulate_Deme_Line:
         cdef Individual[:] ind_list
         cdef Deme d
 
-        for i in range(num_demes):
-            ind_list = np.array([Individual(j) for j in np.random.randint(low=0, high=num_alleles, size=num_individuals)])
-            d = Deme(num_alleles, ind_list, fraction_swap = fraction_swap)
-            temp_deme_list.append(d)
+        # Put the same IC in each deme for now
 
+        if self.initial_condition is None:
+            for i in range(num_demes):
+                ind_list = np.array([Individual(j) for j in np.random.randint(low=0, high=num_alleles, size=self.num_individuals)])
+                d = Deme(num_alleles, ind_list, fraction_swap = fraction_swap)
+                temp_deme_list.append(d)
+        else:
+            for i in range(num_demes):
+                ind_list = np.array([Individual(j) for j in self.initial_condition])
+                d = Deme(num_alleles, ind_list, fraction_swap = fraction_swap)
+                temp_deme_list.append(d)
 
         self.deme_list = np.array(temp_deme_list, dtype=Deme)
 
@@ -215,7 +226,7 @@ cdef class Simulate_Deme_Line:
 
         cdef long num_iterations
 
-        num_iterations = num_generations * num_individuals + 1
+        num_iterations = self.num_generations * self.num_individuals + 1
         self.history = np.empty((num_records, num_demes, num_alleles), dtype=np.long)
 
         # Set up the network structure; make sure not to double count!
