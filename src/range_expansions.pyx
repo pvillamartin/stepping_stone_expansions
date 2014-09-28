@@ -279,7 +279,7 @@ cdef class Simulate_Deme_Line:
             self.reproduce(r)
 
             # Swap when appropriate
-            if swap_every >= 1: # Swap less frequently than reproduction
+            if swap_every >= 2: # Swap less frequently than reproduction
                 if swap_count >= swap_every:
                     swap_count = 0
                     num_times_swapped += 1
