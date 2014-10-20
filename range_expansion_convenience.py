@@ -169,11 +169,12 @@ class Simulate_3_Alleles_Deme:
         ternary.draw_boundary(scale=scale, ax=ax)
 
         plt.gca().set_aspect('equal', adjustable='box')
+        plt.xlim([-.1*scale,1.1*scale])
         plt.ylim([-0.13*scale, scale])
 
-        plt.text(.15 * scale, .43*scale, r'$f_1$', fontsize=35 )
-        plt.text(.78 * scale, .43*scale, r'$f_3$', fontsize=35 )
-        plt.text(.46*scale, -0.1*scale, r'$f_2$', fontsize=35)
+        plt.text(1.01 * scale, -.05*scale, r'$f_1$', fontsize=35 )
+        plt.text(-.08 * scale, -.05*scale, r'$f_3$', fontsize=35 )
+        plt.text(.46*scale, .9*scale, r'$f_2$', fontsize=35)
         plt.gca().yaxis.set_visible(False)
         plt.gca().xaxis.set_visible(False)
         plt.grid(False)
