@@ -444,11 +444,13 @@ cdef class Simulate_Deme_Line:
         history = np.asarray(self.history)
         fractional_history = history/float(self.num_individuals)
 
-        pixels = np.empty((self.num_generations, self.num_demes))
+        num_entries = len(self.frac_gen)
+
+        pixels = np.empty((num_entries, self.num_demes))
 
         cdef int i
 
-        for i in range(self.num_generations):
+        for i in range(num_entries):
             pixels[i, :] = fractional_history[i, :, allele_num]
 
         return pixels
