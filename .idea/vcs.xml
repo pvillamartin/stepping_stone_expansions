@@ -2,7 +2,7 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
-    <mapping directory="$USER_HOME$/git/cpp_range_expansions_new" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../cpp_range_expansions_new" vcs="Git" />
   </component>
 </project>
 

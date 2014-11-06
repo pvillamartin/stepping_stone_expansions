@@ -45,9 +45,6 @@ cdef class Deme:
         self.binned_alleles = self.bin_alleles()
         self.fraction_swap = fraction_swap
 
-        cdef double seed
-        seed = random.randint(0, sys.maxint)
-
         self.neighbors=None
 
     cdef reproduce(Deme self, int to_reproduce, int to_die):
@@ -100,6 +97,73 @@ cdef class Deme:
         there is a problem in the code somewhere.'''
 
         return np.array_equal(self.binned_alleles, self.bin_alleles())
+
+cdef class Simulate_Deme:
+    cdef readonly Deme deme
+    cdef readonly long num_generations
+    cdef readonly unsigned long int seed
+
+    cdef readonly long[:,:] history
+    cdef readonly double[:] fractional_generation
+    cdef readonly unsigned int num_iterations
+    cdef readonly double record_every_fracgen
+
+    cdef unsigned int record_every
+
+    def __init__(self, Deme deme, long num_generations, unsigned long int seed = 0, record_every_fracgen = -1.0):
+
+        self.deme = deme
+        self.num_generations = num_generations
+        self.seed = seed
+        self.record_every_fracgen = record_every_fracgen
+
+        if self.record_every_fracgen == -1.0:
+            self.record_every_fracgen = 1./self.deme.num_members
+
+        # Calculate how many iterations you must wait before recording
+        self.record_every = int(deme.num_members * self.record_every_fracgen)
+
+        # Take into account how often we record
+        self.num_iterations = self.num_generations * self.deme.num_members / self.record_every
+
+        self.fractional_generation = np.empty(self.num_iterations + 1, dtype=np.double)
+        self.history = np.empty((self.num_iterations + 1, deme.num_alleles), dtype=np.long)
+
+    def simulate(self):
+        print 'This is an abstract class; instantiate a lower level one, i.e. neutral deme.'
+
+cdef class Simulate_Neutral_Deme(Simulate_Deme):
+
+    def __init__(self, Deme deme, long num_generations, unsigned long int seed = 0, record_every_fracgen = -1.0):
+        Simulate_Deme.__init__(self, deme, num_generations, seed, record_every_fracgen)
+
+    def simulate(self):
+
+        # Prepare random number generation
+        np.random.seed(self.seed)
+
+        cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
+        gsl_rng_set(r, self.seed)
+
+        cdef unsigned long int to_reproduce
+        cdef unsigned long int to_die
+
+        cdef unsigned int count = 0
+
+        cdef long i
+        for i in range(self.num_iterations):
+            if (i % self.record_every) == 0:
+                self.fractional_generation[count] = float(i)/self.deme.num_members
+                self.history[count, :] = self.deme.binned_alleles
+                count += 1
+            to_reproduce = gsl_rng_uniform_int(r, self.deme.num_members)
+            to_die = gsl_rng_uniform_int(r, self.deme.num_members)
+            self.deme.reproduce(to_reproduce, to_die)
+
+        self.fractional_generation[count] = self.num_iterations/self.deme.num_members
+        self.history[count, :] = self.deme.binned_alleles
+
+        gsl_rng_free(r)
 
 def simulate_deme(Deme deme, long num_generations=100, unsigned long int seed = 0, record_every_fracgen = -1):
     cdef long[:,:] history
