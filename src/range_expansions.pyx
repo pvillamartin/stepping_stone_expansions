@@ -34,13 +34,13 @@ cdef class Deme:
     cdef readonly Individual[:] members
     cdef readonly long num_alleles
     cdef readonly long[:] binned_alleles
-    cdef readonly long num_members
+    cdef readonly long num_individuals
     cdef readonly double fraction_swap
     cdef public Deme[:] neighbors
 
     def __init__(Deme self,  long num_alleles, Individual[:] members not None, double fraction_swap = 0.0):
         self.members = members
-        self.num_members = len(members)
+        self.num_individuals = len(members)
         self.num_alleles = num_alleles
         self.binned_alleles = self.bin_alleles()
         self.fraction_swap = fraction_swap
@@ -118,18 +118,18 @@ cdef class Simulate_Deme:
         self.record_every_fracgen = record_every_fracgen
 
         if self.record_every_fracgen == -1.0:
-            self.record_every_fracgen = 1./self.deme.num_members
+            self.record_every_fracgen = 1./self.deme.num_individuals
 
         # Calculate how many iterations you must wait before recording
-        self.record_every = int(deme.num_members * self.record_every_fracgen)
+        self.record_every = int(deme.num_individuals * self.record_every_fracgen)
 
         # Take into account how often we record
-        self.num_iterations = self.num_generations * self.deme.num_members / self.record_every
+        self.num_iterations = self.num_generations * self.deme.num_individuals / self.record_every
 
         self.fractional_generation = np.empty(self.num_iterations + 1, dtype=np.double)
         self.history = np.empty((self.num_iterations + 1, deme.num_alleles), dtype=np.long)
 
-    def simulate(self):
+    cpdef simulate(self):
         print 'This is an abstract class; instantiate a lower level one, i.e. neutral deme.'
 
 cdef class Simulate_Neutral_Deme(Simulate_Deme):
@@ -137,7 +137,7 @@ cdef class Simulate_Neutral_Deme(Simulate_Deme):
     def __init__(self, Deme deme, long num_generations, unsigned long int seed = 0, record_every_fracgen = -1.0):
         Simulate_Deme.__init__(self, deme, num_generations, seed, record_every_fracgen)
 
-    def simulate(self):
+    cpdef simulate(self):
 
         # Prepare random number generation
         np.random.seed(self.seed)
@@ -153,94 +153,57 @@ cdef class Simulate_Neutral_Deme(Simulate_Deme):
         cdef long i
         for i in range(self.num_iterations):
             if (i % self.record_every) == 0:
-                self.fractional_generation[count] = float(i)/self.deme.num_members
+                self.fractional_generation[count] = float(i)/self.deme.num_individuals
                 self.history[count, :] = self.deme.binned_alleles
                 count += 1
-            to_reproduce = gsl_rng_uniform_int(r, self.deme.num_members)
-            to_die = gsl_rng_uniform_int(r, self.deme.num_members)
+            to_reproduce = gsl_rng_uniform_int(r, self.deme.num_individuals)
+            to_die = gsl_rng_uniform_int(r, self.deme.num_individuals)
             self.deme.reproduce(to_reproduce, to_die)
 
-        self.fractional_generation[count] = self.num_iterations/self.deme.num_members
+        self.fractional_generation[count] = self.num_iterations/self.deme.num_individuals
         self.history[count, :] = self.deme.binned_alleles
 
         gsl_rng_free(r)
 
-def simulate_deme(Deme deme, long num_generations=100, unsigned long int seed = 0, record_every_fracgen = -1):
-    cdef long[:,:] history
-    cdef double[:] fractional_generation
-    cdef long num_iterations
+cdef class Simulate_Neutral_Deme_Line:
 
-    if record_every_fracgen == -1:
-        record_every_fracgen = 1./deme.num_members
-
-    # Calculate how many iterations you must wait before recording
-    cdef unsigned int record_every = deme.num_members * record_every_fracgen
-
-    # Do everything else
-    num_iterations = num_generations * deme.num_members
-    num_to_record = num_iterations/record_every
-
-    fractional_generation = np.empty(num_to_record + 1, dtype=np.double)
-    history = np.empty((num_to_record + 1, deme.num_alleles), dtype=np.long)
-
-    # Prepare random number generation
-
-    np.random.seed(seed)
-
-    cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
-    gsl_rng_set(r, seed)
-
-    cdef unsigned long int to_reproduce
-    cdef unsigned long int to_die
-
-    cdef unsigned int count = 0
-
-    cdef long i
-    for i in range(num_iterations):
-        if (i % record_every) == 0:
-            fractional_generation[count] = float(i)/deme.num_members
-            history[count, :] = deme.binned_alleles
-            count += 1
-        to_reproduce = gsl_rng_uniform_int(r, deme.num_members)
-        to_die = gsl_rng_uniform_int(r, deme.num_members)
-        deme.reproduce(to_reproduce, to_die)
-
-    fractional_generation[count] = num_iterations/deme.num_members
-    history[count, :] = deme.binned_alleles
-
-    gsl_rng_free(r)
-
-    return fractional_generation, history
-
-cdef class Simulate_Deme_Line:
-
+    cdef readonly Deme[:] initial_deme_list
     cdef readonly Deme[:] deme_list
-    cdef readonly long[:,:,:] history
-    cdef readonly position_map
     cdef readonly long num_demes
     cdef readonly long num_individuals
     cdef readonly long num_alleles
-    cdef readonly long num_generations
     cdef readonly double fraction_swap
+
+    cdef readonly long num_generations
+    cdef readonly double record_every
+    cdef readonly unsigned int num_iterations
+
     cdef readonly bool debug
     cdef readonly unsigned long int seed
-    cdef readonly double record_every
-    cdef readonly double[:] frac_gen
-    cdef readonly long[:] initial_condition
 
-    def __init__(Simulate_Deme_Line self, long[:] initial_condition, long num_demes=100, long num_alleles=2,
+    cdef readonly long[:,:,:] history
+    cdef readonly double[:] frac_gen
+
+    def __init__(Simulate_Neutral_Deme_Line self, Deme[:] initial_deme_list not None, long num_alleles=2,
         long num_generations=100, double fraction_swap=0.1, double record_every = 1.0, unsigned long int seed=0,
         bool debug = False):
+        '''  The user should input the list of demes. It is too annoying otherwise. There can be a utility
+        function to generate common setups though.
 
+        We assume m is the same for each deme, each deme has the same population,
+        and that there is a known finite number of alleles at the start
+        '''
+
+        self.initial_deme_list = initial_deme_list
+        self.deme_list = initial_deme_list
+
+        self.num_individuals = len(initial_deme_list[0].num_individuals)
         self.seed = seed
 
         #### Set the properties of the simulation ###
 
-        self.initial_condition = initial_condition
+        self.num_demes = initial_deme_list.shape[0]
 
-        self.num_demes = num_demes
-
-        self.num_individuals = len(initial_condition)
         self.num_alleles = num_alleles
         self.num_generations = num_generations
         self.fraction_swap = fraction_swap
@@ -257,6 +220,25 @@ cdef class Simulate_Deme_Line:
             invalid_length = np.sqrt(self.fraction_swap * self.num_individuals * self.num_generations)
             print 'Invalid length from walls is ~' , invalid_length
 
+        self.num_iterations = self.num_generations * self.num_individuals + 1
+        self.history = np.empty((num_records, self.num_demes, num_alleles), dtype=np.long)
+
+
+    def link_demes(Simulate_Neutral_Deme_Line self):
+        '''Set up the network structure; make sure not to double count!
+        Create periodic or line BC's here, your choice'''
+
+        cdef long i
+
+        for i in range(self.num_demes):
+            if i != (self.num_demes - 1):
+                self.deme_list[i].neighbors = np.array([self.deme_list[i + 1]], dtype=Deme)
+            else:
+                self.deme_list[i].neighbors = np.array([self.deme_list[0]], dtype=Deme)
+
+
+    cpdef initialize_line(Simulate_Neutral_Deme_Line self, long[:] initial_condition):
+        '''Create the same IC in each deme for convenience.'''
         temp_deme_list = []
 
         cdef int i
@@ -265,124 +247,21 @@ cdef class Simulate_Deme_Line:
 
         # Put the same IC in each deme for now
 
-        if self.initial_condition is None:
-            for i in range(num_demes):
-                ind_list = np.array([Individual(j) for j in np.random.randint(low=0, high=num_alleles, size=self.num_individuals)])
-                d = Deme(num_alleles, ind_list, fraction_swap = fraction_swap)
+        if initial_condition is None:
+            for i in range(self.num_demes):
+                ind_list = np.array([Individual(j) for j in np.random.randint(low=0, high=self.num_alleles, size=self.num_individuals)])
+                d = Deme(self.num_alleles, ind_list, fraction_swap = self.fraction_swap)
                 temp_deme_list.append(d)
         else:
-            for i in range(num_demes):
-                ind_list = np.array([Individual(j) for j in self.initial_condition])
-                d = Deme(num_alleles, ind_list, fraction_swap = fraction_swap)
+            for i in range(self.num_demes):
+                ind_list = np.array([Individual(j) for j in initial_condition])
+                d = Deme(self.num_alleles, ind_list, fraction_swap = self.fraction_swap)
                 temp_deme_list.append(d)
 
         self.deme_list = np.array(temp_deme_list, dtype=Deme)
 
-        input_dict = {}
-        input_dict['deme'] = np.asarray(self.deme_list)
-        positions = np.arange(self.num_demes) - self.num_demes / 2
-        input_dict['position'] = positions
 
-        self.position_map = pd.DataFrame(input_dict)
-
-        # We assume m is the same for each deme, each deme has the same population,
-        # and that there is a known finite number of alleles at the start
-
-        cdef long num_iterations
-
-        num_iterations = self.num_generations * self.num_individuals + 1
-        self.history = np.empty((num_records, num_demes, num_alleles), dtype=np.long)
-
-        # Set up the network structure; make sure not to double count!
-        # Create periodic or line BC's here, your choice
-        for i in range(num_demes):
-            if i != (num_demes - 1):
-                self.deme_list[i].neighbors = np.array([self.deme_list[i + 1]], dtype=Deme)
-            else:
-                self.deme_list[i].neighbors = np.array([self.deme_list[0]], dtype=Deme)
-
-        cdef double swap_every
-        if fraction_swap == 0:
-            swap_every = -1.0
-        else:
-            swap_every = 1.0/fraction_swap
-
-        cdef long swap_count = 0
-        cdef long num_times_swapped = 0
-        cdef double remainder = 0
-
-        # Only useful when you swap more than once per iteration
-        cdef double num_times_to_swap = 1.0/swap_every
-        cdef int cur_gen
-
-        # Use fast random number generation in mission critical methods
-        # Make sure to delete this at the end to avoid memory leaks...
-        cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
-
-        # Now set seeds
-        np.random.seed(seed)
-        gsl_rng_set(r, seed)
-
-        # Figure out how many iterations you should go before recording
-        cdef int record_every_iter = int(record_every * self.num_individuals)
-
-        cdef int num_times_recorded = 0
-
-        for i in range(num_iterations):
-            # Bookkeeping
-            swap_count += 1 # So at the start of the loop this has a minimum of 1
-
-            # Record every "record_every"
-            if (i % record_every_iter == 0) or (i == (num_iterations - 1)):
-                self.frac_gen[num_times_recorded] = float(i) / self.num_individuals
-                for d_num in range(self.num_demes):
-                    self.history[num_times_recorded, d_num, :] = self.deme_list[d_num].binned_alleles
-                num_times_recorded += 1
-
-            # Reproduce
-            self.reproduce(r)
-
-            # Swap when appropriate
-            if swap_every >= 2: # Swap less frequently than reproduction
-                if swap_count >= swap_every:
-                    swap_count = 0
-                    num_times_swapped += 1
-                    self.swap_with_neighbors(r)
-
-            elif swap_every > 0: # Swap more frequently than reproduction
-                while swap_count <= num_times_to_swap:
-                    self.swap_with_neighbors(r)
-                    swap_count += 1
-                    num_times_swapped += 1
-
-                #swap_count will always be too high as you just exited the for loop
-                remainder += num_times_to_swap - (swap_count - 1)
-                swap_count = 0
-                if remainder >= 1:
-                    remainder -= 1
-                    self.swap_with_neighbors(r)
-                    num_times_swapped += 1
-
-        # Check that gene frequencies are correct!
-
-        cdef long num_correct = 0
-        if debug:
-            for d in self.deme_list:
-                if d.check_allele_frequency():
-                    num_correct += 1
-                else:
-                    print 'Incorrect allele frequencies!'
-            print 'Num correct:' , num_correct, 'out of', len(self.deme_list)
-
-            # Check number of times swapped
-            print 'Fraction swapped:' , num_times_swapped / float(self.num_generations*self.num_individuals)
-            print 'Desired fraction:' , self.fraction_swap
-
-        # DONE! Deallocate as necessary.
-        gsl_rng_free(r)
-
-
-    cdef swap_with_neighbors(Simulate_Deme_Line self, gsl_rng *r):
+    cdef swap_with_neighbors(Simulate_Neutral_Deme_Line self, gsl_rng *r):
         '''Be careful not to double swap! Each deme swaps once per edge.'''
         cdef long[:] swap_order
         cdef long swap_index
@@ -416,13 +295,13 @@ cdef class Simulate_Deme_Line:
             num_neighbors = neighbors.shape[0]
             for j in range(num_neighbors):
                 otherDeme = neighbors[j]
-                self_swap_index = gsl_rng_uniform_int(r, current_deme.num_members)
-                other_swap_index = gsl_rng_uniform_int(r, otherDeme.num_members)
+                self_swap_index = gsl_rng_uniform_int(r, current_deme.num_individuals)
+                other_swap_index = gsl_rng_uniform_int(r, otherDeme.num_individuals)
                 current_deme.swap_members(otherDeme, self_swap_index, other_swap_index)
 
         gsl_permutation_free(p)
 
-    cdef reproduce(Simulate_Deme_Line self, gsl_rng *r):
+    cdef reproduce(Simulate_Neutral_Deme_Line self, gsl_rng *r):
         cdef int d_num
         cdef long[:] current_alleles
         cdef Deme tempDeme
@@ -431,11 +310,11 @@ cdef class Simulate_Deme_Line:
 
         for d_num in range(self.num_demes):
             tempDeme = self.deme_list[d_num]
-            to_reproduce = gsl_rng_uniform_int(r, tempDeme.num_members)
-            to_die = gsl_rng_uniform_int(r, tempDeme.num_members)
+            to_reproduce = gsl_rng_uniform_int(r, tempDeme.num_individuals)
+            to_die = gsl_rng_uniform_int(r, tempDeme.num_individuals)
             tempDeme.reproduce(to_reproduce, to_die)
 
-    def count_sectors(Simulate_Deme_Line self, double cutoff = 0.1):
+    def count_sectors(Simulate_Neutral_Deme_Line self, double cutoff = 0.1):
         '''Run this after the simulation has concluded to count the number of sectors'''
         # All you have to do is to count what the current domain type is and when it changes.
         # This is complicated by the fact that everything is fuzzy and that there can be
@@ -454,7 +333,7 @@ cdef class Simulate_Deme_Line:
 
         return np.array(data_list)
 
-    cpdef F_ij(Simulate_Deme_Line self, long i, long j, x1):
+    cpdef F_ij(Simulate_Neutral_Deme_Line self, long i, long j, x1):
 
         m = self.position_map
         start_deme_index = m[m['position'] == x1].index[0]
@@ -474,7 +353,7 @@ cdef class Simulate_Deme_Line:
 
         return fij, delta_positions
 
-    def animate(Simulate_Deme_Line self, generation_spacing = 1, interval = 1):
+    def animate(Simulate_Neutral_Deme_Line self, generation_spacing = 1, interval = 1):
         '''Animates at the desired generation spacing using matplotlib'''
         history = np.asarray(self.history)
         # Only get data for every generation
@@ -503,7 +382,7 @@ cdef class Simulate_Deme_Line:
         return animation.FuncAnimation(fig, animate_frame, blit=True, init_func = init,
                                        frames=num_frames, interval=interval)
 
-    def get_allele_history(Simulate_Deme_Line self, long allele_num):
+    def get_allele_history(Simulate_Neutral_Deme_Line self, long allele_num):
 
         history = np.asarray(self.history)
         fractional_history = history/float(self.num_individuals)
@@ -518,3 +397,87 @@ cdef class Simulate_Deme_Line:
             pixels[i, :] = fractional_history[i, :, allele_num]
 
         return pixels
+
+    cpdef simulate(self):
+
+        self.link_demes()
+
+        cdef double swap_every
+        if self.fraction_swap == 0:
+            swap_every = -1.0
+        else:
+            swap_every = 1.0/self.fraction_swap
+
+        cdef long swap_count = 0
+        cdef long num_times_swapped = 0
+        cdef double remainder = 0
+
+        # Only useful when you swap more than once per iteration
+        cdef double num_times_to_swap = 1.0/swap_every
+        cdef int cur_gen
+
+        # Use fast random number generation in mission critical methods
+        # Make sure to delete this at the end to avoid memory leaks...
+        cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
+
+        # Now set seeds
+        np.random.seed(self.seed)
+        gsl_rng_set(r, self.seed)
+
+        # Figure out how many iterations you should go before recording
+        cdef int record_every_iter = int(self.record_every * self.num_individuals)
+
+        cdef int num_times_recorded = 0
+
+        for i in range(self.num_iterations):
+            # Bookkeeping
+            swap_count += 1 # So at the start of the loop this has a minimum of 1
+
+            # Record every "record_every"
+            if (i % record_every_iter == 0) or (i == (self.num_iterations - 1)):
+                self.frac_gen[num_times_recorded] = float(i) / self.num_individuals
+                for d_num in range(self.num_demes):
+                    self.history[num_times_recorded, d_num, :] = self.deme_list[d_num].binned_alleles
+                num_times_recorded += 1
+
+            # Reproduce
+            self.reproduce(r)
+
+            # Swap when appropriate
+            if swap_every >= 2: # Swap less frequently than reproduction
+                if swap_count >= swap_every:
+                    swap_count = 0
+                    num_times_swapped += 1
+                    self.swap_with_neighbors(r)
+
+            elif swap_every > 0: # Swap more frequently than reproduction
+                while swap_count <= num_times_to_swap:
+                    self.swap_with_neighbors(r)
+                    swap_count += 1
+                    num_times_swapped += 1
+
+                #swap_count will always be too high as you just exited the for loop
+                remainder += num_times_to_swap - (swap_count - 1)
+                swap_count = 0
+                if remainder >= 1:
+                    remainder -= 1
+                    self.swap_with_neighbors(r)
+                    num_times_swapped += 1
+
+        # Check that gene frequencies are correct!
+
+        cdef long num_correct = 0
+        if self.debug:
+            for d in self.deme_list:
+                if d.check_allele_frequency():
+                    num_correct += 1
+                else:
+                    print 'Incorrect allele frequencies!'
+            print 'Num correct:' , num_correct, 'out of', len(self.deme_list)
+
+            # Check number of times swapped
+            print 'Fraction swapped:' , num_times_swapped / float(self.num_generations*self.num_individuals)
+            print 'Desired fraction:' , self.fraction_swap
+
+        # DONE! Deallocate as necessary.
+        gsl_rng_free(r)
