@@ -1,4 +1,4 @@
-#cython: profile=False
+#cython: profile=True
 #cython: boundscheck=True
 #cython: initializedcheck=True
 #cython: nonecheck=False
@@ -163,10 +163,10 @@ cdef class Simulate_Neutral_Deme:
 
         gsl_rng_free(r)
 
-cdef inline unsigned long int get_neutral_reproduce(gsl_rng *r, long num_individuals) nogil:
+cdef inline unsigned long int get_neutral_reproduce(gsl_rng *r, long num_individuals):
         return gsl_rng_uniform_int(r, num_individuals)
 
-cdef inline unsigned long int get_neutral_die(gsl_rng *r, long num_individuals) nogil:
+cdef inline unsigned long int get_neutral_die(gsl_rng *r, long num_individuals):
         return gsl_rng_uniform_int(r, num_individuals)
 
 
@@ -189,7 +189,7 @@ cdef class Simulate_Neutral_Deme_Line:
     cdef readonly long[:,:,:] history
     cdef readonly double[:] frac_gen
 
-    def __init__(Simulate_Neutral_Deme_Line self, Deme[:] initial_deme_list not None, long num_alleles=2,
+    def __init__(Simulate_Neutral_Deme_Line self, Deme[:] initial_deme_list, long num_alleles=2,
         long num_generations=100, double fraction_swap=0.1, double record_every = 1.0, unsigned long int seed=0,
         bool debug = False):
         '''  The user should input the list of demes. It is too annoying otherwise. There can be a utility
@@ -200,7 +200,7 @@ cdef class Simulate_Neutral_Deme_Line:
         '''
 
         self.initial_deme_list = initial_deme_list
-        self.deme_list = initial_deme_list
+        self.deme_list = initial_deme_list.copy()
 
         self.num_individuals = initial_deme_list[0].num_individuals
         self.seed = seed
