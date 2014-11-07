@@ -1,9 +1,9 @@
-#cython: profile=True
-#cython: boundscheck=True
-#cython: initializedcheck=True
+#cython: profile=False
+#cython: boundscheck=False
+#cython: initializedcheck=False
 #cython: nonecheck=False
-#cython: wraparound=True
-#cython: cdivision=False
+#cython: wraparound=False
+#cython: cdivision=True
 
 # Things will actually crash if nonecheck is set to true...as neighbors is initially set to none
 
@@ -163,10 +163,10 @@ cdef class Simulate_Neutral_Deme:
 
         gsl_rng_free(r)
 
-cdef inline unsigned long int get_neutral_reproduce(gsl_rng *r, long num_individuals):
+cdef inline unsigned long int get_neutral_reproduce(gsl_rng *r, long num_individuals) nogil:
         return gsl_rng_uniform_int(r, num_individuals)
 
-cdef inline unsigned long int get_neutral_die(gsl_rng *r, long num_individuals):
+cdef inline unsigned long int get_neutral_die(gsl_rng *r, long num_individuals) nogil:
         return gsl_rng_uniform_int(r, num_individuals)
 
 
