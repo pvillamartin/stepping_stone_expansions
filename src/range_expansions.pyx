@@ -56,6 +56,7 @@ cdef class Deme:
 
         self.neighbors=None
 
+        # Initialize the growth rate array
         cdef Individual ind
         temp_growth_list = []
         for ind in self.members:
@@ -105,6 +106,12 @@ cdef class Deme:
         ## Update members
         self.members[self_swap_index] = other_swap
         other.members[other_swap_index] = self_swap
+
+        # TODO Check that selection is updated appropriately
+        cdef double other_fitness = other.growth_rate_list[other_swap_index]
+        cdef double self_fitness  = self.growth_rate_list[self_swap_index]
+        self.growth_rate_list[self_swap_index] = other_fitness
+        self.growth_rate_list[other_swap_index] = self_fitness
 
     cpdef get_alleles(Deme self):
         return [individual.allele_id for individual in self.members]
