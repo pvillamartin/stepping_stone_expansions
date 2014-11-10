@@ -25,13 +25,19 @@ from cython_gsl cimport *
 cdef class Individual:
 
     cdef readonly long allele_id
+    # Note that all rates should be non-dimensionalized in terms of generation time
+    cdef readonly double growth_rate
+    cdef readonly double mutation_rate
 
-    def __init__(Individual self, long allele_id):
+    def __init__(Individual self, long allele_id, growth_rate = 1.0, mutation_rate = 0.0):
         self.allele_id = allele_id
+        self.growth_rate = growth_rate
+        self.mutation_rate = mutation_rate
 
 cdef class Deme:
 # Assumes population in each deme is fixed!
 # Otherwise random number generator breaks down.
+# Include selection too
 
     cdef readonly Individual[:] members
     cdef readonly long num_alleles
@@ -39,6 +45,7 @@ cdef class Deme:
     cdef readonly long num_individuals
     cdef readonly double fraction_swap
     cdef public Deme[:] neighbors
+    cdef readonly double[:] growth_rate_list
 
     def __init__(Deme self,  long num_alleles, Individual[:] members not None, double fraction_swap = 0.0):
         self.members = members
@@ -48,6 +55,12 @@ cdef class Deme:
         self.fraction_swap = fraction_swap
 
         self.neighbors=None
+
+        cdef Individual ind
+        temp_growth_list = []
+        for ind in self.members:
+            temp_growth_list.append(ind.growth_rate)
+        self.growth_rate_list = np.array(temp_growth_list, dtype = double)
 
     cdef reproduce(Deme self, int to_reproduce, int to_die):
 
@@ -59,8 +72,14 @@ cdef class Deme:
         cdef int allele_to_die = individual_to_die.allele_id
         cdef int allele_to_reproduce = individual_to_reproduce.allele_id
 
+        # Update the binned alleles
         self.binned_alleles[allele_to_die] -= 1
         self.binned_alleles[allele_to_reproduce] += 1
+        # Update the growth rate array; take the small (hopefully) hit in speed
+        # for the neutral case to get additional flexibility
+        cdef double surviving_growth_rate = self.growth_rate_list[to_reproduce]
+        self.growth_rate_list[to_die] = surviving_growth_rate
+
         # Update the members
         # This is a little silly, i.e. doing this in two steps, but
         # it doesn't seem to work otherwise
@@ -112,7 +131,8 @@ cdef class Simulate_Neutral_Deme:
 
     cdef unsigned int record_every
 
-    def __init__(Simulate_Neutral_Deme self, Deme deme, long num_generations, unsigned long int seed = 0, record_every_fracgen = -1.0):
+    def __init__(Simulate_Neutral_Deme self, Deme deme, long num_generations,
+                 unsigned long int seed = 0, record_every_fracgen = -1.0):
 
         self.deme = deme
         self.num_generations = num_generations
@@ -168,6 +188,22 @@ cdef inline unsigned long int get_neutral_reproduce(gsl_rng *r, long num_individ
 
 cdef inline unsigned long int get_neutral_die(gsl_rng *r, long num_individuals) nogil:
         return gsl_rng_uniform_int(r, num_individuals)
+
+cdef class Simulate_Selection_Deme(Simulate_Neutral_Deme):
+    '''Make sure you initialize members with a fitness...or else bizarre things will happen.'''
+
+    cdef readonly double[:] growth_rate_list
+
+    cpdef __init__(Simulate_Selection_Deme self, Deme deme, long num_generations,
+                 unsigned long int seed = 0, record_every_fracgen = -1.0):
+        Simulate_Neutral_Deme.__init__(self, deme, num_generations, seed, record_every_fracgen)
+
+        # Cycle through each individual in the deme, assign the growth rate list
+        cdef Individual ind
+        temp_growth_list = []
+        for ind in self.deme.members:
+            temp_growth_list.append(ind.growth_rate)
+        self.growth_rate_list = np.array(temp_growth_list, dtype = double)
 
 
 cdef class Simulate_Neutral_Deme_Line:
