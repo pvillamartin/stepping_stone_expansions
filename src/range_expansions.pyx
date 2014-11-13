@@ -138,9 +138,6 @@ cdef class Simulate_Neutral_Deme:
 
     cdef unsigned int record_every
 
-    cdef unsigned long  (*reproduce_func)(gsl_rng *, long) nogil
-    cdef unsigned long  (*die_func)(gsl_rng *, long) nogil
-
     def __init__(Simulate_Neutral_Deme self, Deme deme, long num_generations,
                  unsigned long int seed = 0, record_every_fracgen = -1.0):
 
@@ -160,9 +157,6 @@ cdef class Simulate_Neutral_Deme:
 
         self.fractional_generation = np.empty(self.num_iterations + 1, dtype=np.double)
         self.history = np.empty((self.num_iterations + 1, deme.num_alleles), dtype=np.long)
-
-        self.reproduce_func = &get_neutral_reproduce
-        self.die_func = &get_neutral_die
 
     cpdef simulate(Simulate_Neutral_Deme self):
 
@@ -187,8 +181,8 @@ cdef class Simulate_Neutral_Deme:
                 self.history[count, :] = self.deme.binned_alleles
                 count += 1
 
-            to_reproduce = get_neutral_reproduce(r, cur_num_individuals)
-            to_die = get_neutral_die(r, cur_num_individuals)
+            to_reproduce = self.get_reproduce(r)
+            to_die = self.get_die(r)
             self.deme.reproduce(to_reproduce, to_die)
 
         self.fractional_generation[count] = self.num_iterations/self.deme.num_individuals
@@ -196,18 +190,11 @@ cdef class Simulate_Neutral_Deme:
 
         gsl_rng_free(r)
 
-cdef inline unsigned long int get_neutral_reproduce(gsl_rng *r, long num_individuals) nogil:
-        return gsl_rng_uniform_int(r, num_individuals)
+    cdef inline unsigned long int get_reproduce(Simulate_Neutral_Deme self, gsl_rng *r):
+        return gsl_rng_uniform_int(r, self.deme.num_individuals)
 
-cdef inline unsigned long int get_neutral_die(gsl_rng *r, long num_individuals) nogil:
-        return gsl_rng_uniform_int(r, num_individuals)
-
-cdef inline unsigned long int get_selection_reproduce(gsl_rng *r, long num_individuals) nogil:
-        return gsl_rng_uniform_int(r, num_individuals)
-
-cdef inline unsigned long int get_selection_die(gsl_rng *r, long num_individuals) nogil:
-        return gsl_rng_uniform_int(r, num_individuals)
-
+    cdef inline unsigned long int get_die(Simulate_Neutral_Deme self, gsl_rng *r):
+        return gsl_rng_uniform_int(r, self.deme.num_individuals)
 
 
 cdef class Simulate_Selection_Deme(Simulate_Neutral_Deme):
@@ -218,6 +205,11 @@ cdef class Simulate_Selection_Deme(Simulate_Neutral_Deme):
         Simulate_Neutral_Deme.__init__(self, deme, num_generations, seed, record_every_fracgen)
 
     # The only thing we have to update is the reproduce/die weighting function with selection
+    cdef inline unsigned long int get_reproduce(Simulate_Neutral_Deme self, gsl_rng *r):
+        return gsl_rng_uniform_int(r, self.deme.num_individuals)
+
+    cdef inline unsigned long int get_die(Simulate_Neutral_Deme self, gsl_rng *r):
+        return gsl_rng_uniform_int(r, self.deme.num_individuals)
 
 cdef class Simulate_Neutral_Deme_Line:
 
