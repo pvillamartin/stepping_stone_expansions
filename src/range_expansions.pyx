@@ -61,7 +61,7 @@ cdef class Deme:
         temp_growth_list = []
         for ind in self.members:
             temp_growth_list.append(ind.growth_rate)
-        self.growth_rate_list = np.array(temp_growth_list, dtype = double)
+        self.growth_rate_list = np.array(temp_growth_list, dtype = np.double)
 
     cdef reproduce(Deme self, int to_reproduce, int to_die):
 
@@ -138,6 +138,9 @@ cdef class Simulate_Neutral_Deme:
 
     cdef unsigned int record_every
 
+    cdef unsigned long  (*reproduce_func)(gsl_rng *, long) nogil
+    cdef unsigned long  (*die_func)(gsl_rng *, long) nogil
+
     def __init__(Simulate_Neutral_Deme self, Deme deme, long num_generations,
                  unsigned long int seed = 0, record_every_fracgen = -1.0):
 
@@ -157,6 +160,9 @@ cdef class Simulate_Neutral_Deme:
 
         self.fractional_generation = np.empty(self.num_iterations + 1, dtype=np.double)
         self.history = np.empty((self.num_iterations + 1, deme.num_alleles), dtype=np.long)
+
+        self.reproduce_func = &get_neutral_reproduce
+        self.die_func = &get_neutral_die
 
     cpdef simulate(Simulate_Neutral_Deme self):
 
@@ -196,22 +202,22 @@ cdef inline unsigned long int get_neutral_reproduce(gsl_rng *r, long num_individ
 cdef inline unsigned long int get_neutral_die(gsl_rng *r, long num_individuals) nogil:
         return gsl_rng_uniform_int(r, num_individuals)
 
+cdef inline unsigned long int get_selection_reproduce(gsl_rng *r, long num_individuals) nogil:
+        return gsl_rng_uniform_int(r, num_individuals)
+
+cdef inline unsigned long int get_selection_die(gsl_rng *r, long num_individuals) nogil:
+        return gsl_rng_uniform_int(r, num_individuals)
+
+
+
 cdef class Simulate_Selection_Deme(Simulate_Neutral_Deme):
     '''Make sure you initialize members with a fitness...or else bizarre things will happen.'''
-
-    cdef readonly double[:] growth_rate_list
 
     def __init__(Simulate_Selection_Deme self, Deme deme, long num_generations,
                  unsigned long int seed = 0, record_every_fracgen = -1.0):
         Simulate_Neutral_Deme.__init__(self, deme, num_generations, seed, record_every_fracgen)
 
-        # Cycle through each individual in the deme, assign the growth rate list
-        cdef Individual ind
-        temp_growth_list = []
-        for ind in self.deme.members:
-            temp_growth_list.append(ind.growth_rate)
-        self.growth_rate_list = np.array(temp_growth_list, dtype = double)
-
+    # The only thing we have to update is the reproduce/die weighting function with selection
 
 cdef class Simulate_Neutral_Deme_Line:
 
