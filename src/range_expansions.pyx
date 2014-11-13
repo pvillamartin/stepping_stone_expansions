@@ -201,7 +201,7 @@ cdef class Simulate_Selection_Deme(Simulate_Neutral_Deme):
 
     cdef readonly double[:] growth_rate_list
 
-    cpdef __init__(Simulate_Selection_Deme self, Deme deme, long num_generations,
+    def __init__(Simulate_Selection_Deme self, Deme deme, long num_generations,
                  unsigned long int seed = 0, record_every_fracgen = -1.0):
         Simulate_Neutral_Deme.__init__(self, deme, num_generations, seed, record_every_fracgen)
 
