@@ -44,7 +44,7 @@ for i in iterations:
     fractional_generation[i] = float(i)/num_members
     for d_num in range(numDemes):
         history[d_num, i, :] = demeList[d_num].binned_alleles
-        demeList[d_num].reproduce()
+        demeList[d_num].reproduce_line()
     if np.mod(i + 1, swap_every) == 0:
         # Swap between all the neighbors, ideally utilizing some sort of
         # network structure

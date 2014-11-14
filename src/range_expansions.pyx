@@ -35,6 +35,7 @@ cdef class Individual:
         self.mutation_rate = mutation_rate
 
 cdef class Deme:
+    '''The neutral deme. Initiate selection deme or selection_mutation deme as appropriate.'''
 # Assumes population in each deme is fixed!
 # Otherwise random number generator breaks down.
 # Include selection too
@@ -63,7 +64,10 @@ cdef class Deme:
             temp_growth_list.append(ind.growth_rate)
         self.growth_rate_list = np.array(temp_growth_list, dtype = np.double)
 
-    cdef reproduce(Deme self, int to_reproduce, int to_die):
+    cdef reproduce_die_step(Deme self, gsl_rng *r):
+
+        cdef unsigned int to_reproduce = self.get_reproduce(r)
+        cdef unsigned int to_die = self.get_die(r)
 
         # Update allele array
 
@@ -87,11 +91,22 @@ cdef class Deme:
         cdef Individual reproducer = self.members[to_reproduce]
         self.members[to_die] = reproducer
 
-    cdef swap_members(Deme self, Deme other, int self_swap_index, int other_swap_index):
-        cdef int i
+    cdef unsigned long int get_reproduce(Deme self, gsl_rng *r):
+        return gsl_rng_uniform_int(r, self.num_individuals)
 
-        cdef Individual self_swap
-        cdef Individual other_swap
+    cdef unsigned long int get_die(Deme self, gsl_rng *r):
+        return gsl_rng_uniform_int(r, self.num_individuals)
+
+
+    cdef swap_members(Deme self, Deme other, gsl_rng *r):
+        cdef:
+            int i
+
+            unsigned int self_swap_index = self.get_swap_index(r)
+            unsigned int other_swap_index = other.get_swap_index(r)
+
+            Individual self_swap
+            Individual other_swap
 
         self_swap = self.members[self_swap_index]
         other_swap = other.members[other_swap_index]
@@ -108,10 +123,14 @@ cdef class Deme:
         other.members[other_swap_index] = self_swap
 
         # TODO Check that selection is updated appropriately
-        cdef double other_fitness = other.growth_rate_list[other_swap_index]
-        cdef double self_fitness  = self.growth_rate_list[self_swap_index]
+        cdef:
+            other_fitness = other.growth_rate_list[other_swap_index]
+            double self_fitness  = self.growth_rate_list[self_swap_index]
         self.growth_rate_list[self_swap_index] = other_fitness
         self.growth_rate_list[other_swap_index] = self_fitness
+
+    cdef unsigned long int get_swap_index(Deme self, gsl_rng *r):
+        return gsl_rng_uniform_int(r, self.num_individuals)
 
     cpdef get_alleles(Deme self):
         return [individual.allele_id for individual in self.members]
@@ -126,7 +145,32 @@ cdef class Deme:
 
         return np.array_equal(self.binned_alleles, self.bin_alleles())
 
-cdef class Simulate_Neutral_Deme:
+cdef class Selection_Deme(Deme):
+
+    # The only thing we have to update is the reproduce/die weighting function with selection
+    cdef unsigned long int get_reproduce(Selection_Deme self, gsl_rng *r):
+        '''We implement selection here. There is a higher chance to reproduce.'''
+        cdef double rand_num = gsl_rng_uniform(r)
+
+        cdef double cur_sum = 0
+        cdef unsigned int index = 0
+
+        # Normalize the fitnesses
+        cdef double[:] normalized_weights = self.growth_rate_list / np.sum(self.growth_rate_list)
+
+        cdef double normalized_sum = 0
+
+        for index in range(self.num_individuals):
+            cur_sum += normalized_weights[index]
+
+            if cur_sum > rand_num:
+                return index
+
+        return -1
+
+    # There is no increased probability to die in this model; don't have to adjust that
+
+cdef class Simulate_Deme:
     cdef readonly Deme deme
     cdef readonly long num_generations
     cdef readonly unsigned long int seed
@@ -137,7 +181,7 @@ cdef class Simulate_Neutral_Deme:
     cdef readonly double record_every_fracgen
     cdef readonly unsigned int record_every
 
-    def __init__(Simulate_Neutral_Deme self, Deme deme, long num_generations,
+    def __init__(Simulate_Deme self, Deme deme, long num_generations,
                  unsigned long int seed = 0, double record_every_fracgen = -1.0):
 
         self.deme = deme
@@ -159,7 +203,7 @@ cdef class Simulate_Neutral_Deme:
         self.fractional_generation = -1*np.ones(num_to_record, dtype=np.double)
         self.history = -1*np.ones((num_to_record, deme.num_alleles), dtype=np.long)
 
-    cpdef simulate(Simulate_Neutral_Deme self):
+    cpdef simulate(Simulate_Deme self):
 
         # Prepare random number generation
         np.random.seed(self.seed)
@@ -179,53 +223,14 @@ cdef class Simulate_Neutral_Deme:
                 self.history[count, :] = self.deme.binned_alleles
                 count += 1
 
-            to_reproduce = self.get_reproduce(r)
-            to_die = self.get_die(r)
-            self.deme.reproduce(to_reproduce, to_die)
+            self.deme.reproduce_die_step(r)
 
         self.fractional_generation[count] = self.num_iterations/self.deme.num_individuals
         self.history[count, :] = self.deme.binned_alleles
 
         gsl_rng_free(r)
 
-    cdef unsigned long int get_reproduce(Simulate_Neutral_Deme self, gsl_rng *r):
-        return gsl_rng_uniform_int(r, self.deme.num_individuals)
-
-    cdef unsigned long int get_die(Simulate_Neutral_Deme self, gsl_rng *r):
-        return gsl_rng_uniform_int(r, self.deme.num_individuals)
-
-
-cdef class Simulate_Selection_Deme(Simulate_Neutral_Deme):
-    '''Make sure you initialize members with a fitness...or else bizarre things will happen.'''
-
-    def __init__(Simulate_Selection_Deme self, Deme deme, long num_generations,
-                 unsigned long int seed = 0, record_every_fracgen = -1.0):
-        Simulate_Neutral_Deme.__init__(self, deme, num_generations, seed, record_every_fracgen)
-
-    # The only thing we have to update is the reproduce/die weighting function with selection
-    cdef unsigned long int get_reproduce(Simulate_Selection_Deme self, gsl_rng *r):
-        '''We implement selection here. There is a higher chance to reproduce.'''
-        cdef double rand_num = gsl_rng_uniform(r)
-
-        cdef double cur_sum = 0
-        cdef unsigned int index = 0
-
-        # Normalize the fitnesses
-        cdef double[:] normalized_weights = self.deme.growth_rate_list / np.sum(self.deme.growth_rate_list)
-
-        cdef double normalized_sum = 0
-
-        for index in range(self.deme.num_individuals):
-            cur_sum += normalized_weights[index]
-
-            if cur_sum > rand_num:
-                return index
-
-        return -1
-
-    # There is no increased probability to die in this model
-
-cdef class Simulate_Neutral_Deme_Line:
+cdef class Simulate_Deme_Line:
 
     cdef readonly Deme[:] initial_deme_list
     cdef readonly Deme[:] deme_list
@@ -244,7 +249,7 @@ cdef class Simulate_Neutral_Deme_Line:
     cdef readonly long[:,:,:] history
     cdef readonly double[:] frac_gen
 
-    def __init__(Simulate_Neutral_Deme_Line self, Deme[:] initial_deme_list, long num_alleles=2,
+    def __init__(Simulate_Deme_Line self, Deme[:] initial_deme_list, long num_alleles=2,
         long num_generations=100, double fraction_swap=0.1, double record_every = 1.0, unsigned long int seed=0,
         bool debug = False):
         '''  The user should input the list of demes. It is too annoying otherwise. There can be a utility
@@ -283,8 +288,11 @@ cdef class Simulate_Neutral_Deme_Line:
         self.num_iterations = self.num_generations * self.num_individuals + 1
         self.history = np.empty((num_records, self.num_demes, num_alleles), dtype=np.long)
 
+        # Don't forget to link the demes!
 
-    def link_demes(Simulate_Neutral_Deme_Line self):
+        self.link_demes()
+
+    def link_demes(Simulate_Deme_Line self):
         '''Set up the network structure; make sure not to double count!
         Create periodic or line BC's here, your choice'''
 
@@ -296,32 +304,7 @@ cdef class Simulate_Neutral_Deme_Line:
             else:
                 self.deme_list[i].neighbors = np.array([self.deme_list[0]], dtype=Deme)
 
-
-    cpdef initialize_line(Simulate_Neutral_Deme_Line self, long[:] initial_condition):
-        '''Create the same IC in each deme for convenience.'''
-        temp_deme_list = []
-
-        cdef int i
-        cdef Individual[:] ind_list
-        cdef Deme d
-
-        # Put the same IC in each deme for now
-
-        if initial_condition is None:
-            for i in range(self.num_demes):
-                ind_list = np.array([Individual(j) for j in np.random.randint(low=0, high=self.num_alleles, size=self.num_individuals)])
-                d = Deme(self.num_alleles, ind_list, fraction_swap = self.fraction_swap)
-                temp_deme_list.append(d)
-        else:
-            for i in range(self.num_demes):
-                ind_list = np.array([Individual(j) for j in initial_condition])
-                d = Deme(self.num_alleles, ind_list, fraction_swap = self.fraction_swap)
-                temp_deme_list.append(d)
-
-        self.deme_list = np.array(temp_deme_list, dtype=Deme)
-
-
-    cdef swap_with_neighbors(Simulate_Neutral_Deme_Line self, gsl_rng *r):
+    cdef swap_with_neighbors(Simulate_Deme_Line self, gsl_rng *r):
         '''Be careful not to double swap! Each deme swaps once per edge.'''
         cdef long[:] swap_order
         cdef long swap_index
@@ -355,13 +338,11 @@ cdef class Simulate_Neutral_Deme_Line:
             num_neighbors = neighbors.shape[0]
             for j in range(num_neighbors):
                 otherDeme = neighbors[j]
-                self_swap_index = gsl_rng_uniform_int(r, current_deme.num_individuals)
-                other_swap_index = gsl_rng_uniform_int(r, otherDeme.num_individuals)
-                current_deme.swap_members(otherDeme, self_swap_index, other_swap_index)
+                current_deme.swap_members(otherDeme, r)
 
         gsl_permutation_free(p)
 
-    cdef reproduce(Simulate_Neutral_Deme_Line self, gsl_rng *r):
+    cdef reproduce_line(Simulate_Deme_Line self, gsl_rng *r):
         cdef int d_num
         cdef long[:] current_alleles
         cdef Deme tempDeme
@@ -370,20 +351,9 @@ cdef class Simulate_Neutral_Deme_Line:
 
         for d_num in range(self.num_demes):
             tempDeme = self.deme_list[d_num]
-            ##TODO: Put the reproduce class in the deme...
-            to_reproduce = self.get_reproduce(r)
-            to_die = self.get_die(r)
-            tempDeme.reproduce(to_reproduce, to_die)
-
-    cdef unsigned long int get_reproduce(Simulate_Neutral_Deme_Line self, gsl_rng *r):
-        return gsl_rng_uniform_int(r, self.deme.num_individuals)
-
-    cdef unsigned long int get_die(Simulate_Neutral_Deme_Line self, gsl_rng *r):
-        return gsl_rng_uniform_int(r, self.deme.num_individuals)
+            tempDeme.reproduce_die_step(r)
 
     cpdef simulate(self):
-
-        self.link_demes()
 
         cdef double swap_every
         if self.fraction_swap == 0:
@@ -426,7 +396,7 @@ cdef class Simulate_Neutral_Deme_Line:
                 num_times_recorded += 1
 
             # Reproduce
-            self.reproduce(r)
+            self.reproduce_line(r)
 
             # Swap when appropriate
             if swap_every >= 2: # Swap less frequently than reproduction
@@ -469,7 +439,7 @@ cdef class Simulate_Neutral_Deme_Line:
 
     ####### Utility Classes #######
 
-    def count_sectors(Simulate_Neutral_Deme_Line self, double cutoff = 0.1):
+    def count_sectors(Simulate_Deme_Line self, double cutoff = 0.1):
         '''Run this after the simulation has concluded to count the number of sectors'''
         # All you have to do is to count what the current domain type is and when it changes.
         # This is complicated by the fact that everything is fuzzy and that there can be
@@ -488,7 +458,7 @@ cdef class Simulate_Neutral_Deme_Line:
 
         return np.array(data_list)
 
-    cpdef F_ij(Simulate_Neutral_Deme_Line self, long i, long j, x1):
+    cpdef F_ij(Simulate_Deme_Line self, long i, long j, x1):
 
         m = self.position_map
         start_deme_index = m[m['position'] == x1].index[0]
@@ -508,7 +478,7 @@ cdef class Simulate_Neutral_Deme_Line:
 
         return fij, delta_positions
 
-    def animate(Simulate_Neutral_Deme_Line self, generation_spacing = 1, interval = 1):
+    def animate(Simulate_Deme_Line self, generation_spacing = 1, interval = 1):
         '''Animates at the desired generation spacing using matplotlib'''
         history = np.asarray(self.history)
         # Only get data for every generation
@@ -537,7 +507,7 @@ cdef class Simulate_Neutral_Deme_Line:
         return animation.FuncAnimation(fig, animate_frame, blit=True, init_func = init,
                                        frames=num_frames, interval=interval)
 
-    def get_allele_history(Simulate_Neutral_Deme_Line self, long allele_num):
+    def get_allele_history(Simulate_Deme_Line self, long allele_num):
 
         history = np.asarray(self.history)
         fractional_history = history/float(self.num_individuals)
@@ -552,32 +522,3 @@ cdef class Simulate_Neutral_Deme_Line:
             pixels[i, :] = fractional_history[i, :, allele_num]
 
         return pixels
-
-cdef class Simulate_Selection_Deme_Line(Simulate_Neutral_Deme_Line):
-    '''Make sure you initialize members with a fitness...or else bizarre things will happen.'''
-
-    def __init__(Simulate_Selection_Deme_Line self, Deme[:] initial_deme_list, **kwargs):
-        Simulate_Neutral_Deme_Line.__init__(self, initial_deme_list, kwargs)
-
-    # The only thing we have to update is the reproduce/die weighting function with selection
-    cdef unsigned long int get_reproduce(Simulate_Selection_Deme_Line self, gsl_rng *r):
-        '''We implement selection here. There is a higher chance to reproduce.'''
-        cdef double rand_num = gsl_rng_uniform(r)
-
-        cdef double cur_sum = 0
-        cdef unsigned int index = 0
-
-        # Normalize the fitnesses
-        cdef double[:] normalized_weights = self.deme.growth_rate_list / np.sum(self.deme.growth_rate_list)
-
-        cdef double normalized_sum = 0
-
-        for index in range(self.deme.num_individuals):
-            cur_sum += normalized_weights[index]
-
-            if cur_sum > rand_num:
-                return index
-
-        return -1
-
-    # There is no increased probability to die in this model
