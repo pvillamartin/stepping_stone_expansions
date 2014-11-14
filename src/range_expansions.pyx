@@ -259,7 +259,7 @@ cdef class Simulate_Deme_Line:
         and that there is a known finite number of alleles at the start
         '''
 
-        self.initial_deme_list = initial_deme_list
+        self.initial_deme_list = initial_deme_list.copy()
         self.deme_list = initial_deme_list
 
         self.num_individuals = initial_deme_list[0].num_individuals
@@ -522,3 +522,40 @@ cdef class Simulate_Deme_Line:
             pixels[i, :] = fractional_history[i, :, allele_num]
 
         return pixels
+
+    def get_color_array(Simulate_Deme_Line self):
+
+        cmap = plt.get_cmap('gist_rainbow')
+        cmap.N = self.num_alleles
+
+        # Hue will not be taken into account
+        color_array = cmap(np.linspace(0, 1, self.num_alleles))
+
+        alleleList = []
+        for i in range(self.num_alleles):
+            alleleList.append(self.get_allele_history(i))
+
+        image = np.zeros((alleleList[0].shape[0], alleleList[0].shape[1], 4))
+
+        for i in range(self.num_alleles):
+            currentAllele = alleleList[i]
+
+            redArray = currentAllele * color_array[i, 0]
+            greenArray = currentAllele * color_array[i, 1]
+            blueArray = currentAllele * color_array[i, 2]
+            aArray = currentAllele * color_array[i, 3]
+
+            image[:, :, 0] += redArray
+            image[:, :, 1] += greenArray
+            image[:, :, 2] += blueArray
+            image[:, :, 3] += aArray
+
+        #There is likely a faster way to do this involving the history, and multiplying it by cmap or something
+
+        return image
+
+    def get_color_array_by_fitness(Simulate_Deme_Line self):
+        # We just have to cycle through the history and calculate the average selective advantage
+        # at each point. I might have to do this as we go, however...
+        print 'Not done yet'
+        #TODO Make these plots looking at fitness instead of allele. It is a more robust measure of what is going on.
