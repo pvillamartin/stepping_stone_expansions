@@ -10,9 +10,8 @@
 __author__ = 'bryan'
 
 cimport cython
-
-cimport numpy as np
 import numpy as np
+cimport numpy as np
 import random
 import sys
 from libcpp cimport bool
@@ -21,6 +20,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from cython_gsl cimport *
+from libc.stdlib cimport free
 
 cdef class Individual:
 
@@ -190,10 +190,10 @@ cdef class Simulate_Neutral_Deme:
 
         gsl_rng_free(r)
 
-    cdef inline unsigned long int get_reproduce(Simulate_Neutral_Deme self, gsl_rng *r):
+    cdef unsigned long int get_reproduce(Simulate_Neutral_Deme self, gsl_rng *r):
         return gsl_rng_uniform_int(r, self.deme.num_individuals)
 
-    cdef inline unsigned long int get_die(Simulate_Neutral_Deme self, gsl_rng *r):
+    cdef unsigned long int get_die(Simulate_Neutral_Deme self, gsl_rng *r):
         return gsl_rng_uniform_int(r, self.deme.num_individuals)
 
 
@@ -205,10 +205,29 @@ cdef class Simulate_Selection_Deme(Simulate_Neutral_Deme):
         Simulate_Neutral_Deme.__init__(self, deme, num_generations, seed, record_every_fracgen)
 
     # The only thing we have to update is the reproduce/die weighting function with selection
-    cdef inline unsigned long int get_reproduce(Simulate_Neutral_Deme self, gsl_rng *r):
-        return gsl_rng_uniform_int(r, self.deme.num_individuals)
+    cdef unsigned long int get_reproduce(Simulate_Selection_Deme self, gsl_rng *r):
+        '''We implement selection here. There is a higher chance to reproduce.'''
+        cdef double rand_num = gsl_rng_uniform(r)
 
-    cdef inline unsigned long int get_die(Simulate_Neutral_Deme self, gsl_rng *r):
+        cdef double cur_sum = 0
+        cdef unsigned int index = 0
+
+        # Normalize the fitnesses
+        cdef double[:] normalized_weights = self.deme.growth_rate_list / np.sum(self.deme.growth_rate_list)
+
+        cdef double normalized_sum = 0
+
+        for index in range(self.deme.num_individuals):
+            cur_sum += normalized_weights[index]
+
+            if cur_sum > rand_num:
+                return index
+
+        return -1
+
+
+    cdef unsigned long int get_die(Simulate_Selection_Deme self, gsl_rng *r):
+        '''There is no increase in probability to die here.'''
         return gsl_rng_uniform_int(r, self.deme.num_individuals)
 
 cdef class Simulate_Neutral_Deme_Line:
