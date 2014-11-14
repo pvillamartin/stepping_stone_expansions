@@ -255,7 +255,7 @@ cdef class Simulate_Neutral_Deme_Line:
         '''
 
         self.initial_deme_list = initial_deme_list
-        self.deme_list = initial_deme_list.copy()
+        self.deme_list = initial_deme_list
 
         self.num_individuals = initial_deme_list[0].num_individuals
         self.seed = seed
@@ -370,9 +370,16 @@ cdef class Simulate_Neutral_Deme_Line:
 
         for d_num in range(self.num_demes):
             tempDeme = self.deme_list[d_num]
-            to_reproduce = gsl_rng_uniform_int(r, tempDeme.num_individuals)
-            to_die = gsl_rng_uniform_int(r, tempDeme.num_individuals)
+            ##TODO: Put the reproduce class in the deme...
+            to_reproduce = self.get_reproduce(r)
+            to_die = self.get_die(r)
             tempDeme.reproduce(to_reproduce, to_die)
+
+    cdef unsigned long int get_reproduce(Simulate_Neutral_Deme_Line self, gsl_rng *r):
+        return gsl_rng_uniform_int(r, self.deme.num_individuals)
+
+    cdef unsigned long int get_die(Simulate_Neutral_Deme_Line self, gsl_rng *r):
+        return gsl_rng_uniform_int(r, self.deme.num_individuals)
 
     cpdef simulate(self):
 
@@ -546,4 +553,31 @@ cdef class Simulate_Neutral_Deme_Line:
 
         return pixels
 
+cdef class Simulate_Selection_Deme_Line(Simulate_Neutral_Deme_Line):
+    '''Make sure you initialize members with a fitness...or else bizarre things will happen.'''
 
+    def __init__(Simulate_Selection_Deme_Line self, Deme[:] initial_deme_list, **kwargs):
+        Simulate_Neutral_Deme_Line.__init__(self, initial_deme_list, kwargs)
+
+    # The only thing we have to update is the reproduce/die weighting function with selection
+    cdef unsigned long int get_reproduce(Simulate_Selection_Deme_Line self, gsl_rng *r):
+        '''We implement selection here. There is a higher chance to reproduce.'''
+        cdef double rand_num = gsl_rng_uniform(r)
+
+        cdef double cur_sum = 0
+        cdef unsigned int index = 0
+
+        # Normalize the fitnesses
+        cdef double[:] normalized_weights = self.deme.growth_rate_list / np.sum(self.deme.growth_rate_list)
+
+        cdef double normalized_sum = 0
+
+        for index in range(self.deme.num_individuals):
+            cur_sum += normalized_weights[index]
+
+            if cur_sum > rand_num:
+                return index
+
+        return -1
+
+    # There is no increased probability to die in this model
