@@ -135,11 +135,10 @@ cdef class Simulate_Neutral_Deme:
     cdef readonly double[:] fractional_generation
     cdef readonly unsigned int num_iterations
     cdef readonly double record_every_fracgen
-
-    cdef unsigned int record_every
+    cdef readonly unsigned int record_every
 
     def __init__(Simulate_Neutral_Deme self, Deme deme, long num_generations,
-                 unsigned long int seed = 0, record_every_fracgen = -1.0):
+                 unsigned long int seed = 0, double record_every_fracgen = -1.0):
 
         self.deme = deme
         self.num_generations = num_generations
@@ -152,11 +151,13 @@ cdef class Simulate_Neutral_Deme:
         # Calculate how many iterations you must wait before recording
         self.record_every = int(deme.num_individuals * self.record_every_fracgen)
 
-        # Take into account how often we record
-        self.num_iterations = self.num_generations * self.deme.num_individuals / self.record_every
+        # The number of iterations is independent of how often we record
+        self.num_iterations = (self.num_generations + 1) * self.deme.num_individuals
+        # Take into account the zeroth state
+        cdef int num_to_record = (self.num_iterations / self.record_every) + 1
 
-        self.fractional_generation = np.empty(self.num_iterations + 1, dtype=np.double)
-        self.history = np.empty((self.num_iterations + 1, deme.num_alleles), dtype=np.long)
+        self.fractional_generation = -1*np.ones(num_to_record, dtype=np.double)
+        self.history = -1*np.ones((num_to_record, deme.num_alleles), dtype=np.long)
 
     cpdef simulate(Simulate_Neutral_Deme self):
 
@@ -168,12 +169,9 @@ cdef class Simulate_Neutral_Deme:
 
         cdef unsigned long to_reproduce
         cdef unsigned long to_die
-
-        cdef unsigned int count = 0
-
         cdef long i
-
         cdef long cur_num_individuals = self.deme.num_individuals
+        cdef unsigned int count = 0
 
         for i in range(self.num_iterations):
             if (i % self.record_every) == 0:
@@ -225,10 +223,7 @@ cdef class Simulate_Selection_Deme(Simulate_Neutral_Deme):
 
         return -1
 
-
-    cdef unsigned long int get_die(Simulate_Selection_Deme self, gsl_rng *r):
-        '''There is no increase in probability to die here.'''
-        return gsl_rng_uniform_int(r, self.deme.num_individuals)
+    # There is no increased probability to die in this model
 
 cdef class Simulate_Neutral_Deme_Line:
 
