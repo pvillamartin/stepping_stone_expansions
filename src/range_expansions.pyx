@@ -26,15 +26,14 @@ cdef class Individual:
     '''We assume all individuals have the same mutation rate; this is implemented at the
     deme level, consequently. It is very annoying otherwise, as we have to worry about other scales...'''
 
-    cdef readonly long allele_id
-    # Note that all rates should be non-dimensionalized in terms of generation time
-    cdef readonly double growth_rate
-    cdef readonly double mutation_rate
+    cdef:
+        readonly long allele_id
+        # Note that all rates should be non-dimensionalized in terms of generation time
+        readonly double growth_rate
 
     def __init__(Individual self, long allele_id, growth_rate = 1.0, mutation_rate = 0.0):
         self.allele_id = allele_id
         self.growth_rate = growth_rate
-        self.mutation_rate = mutation_rate
 
 cdef class Deme:
     '''The neutral deme. Initiate selection deme or selection_mutation deme as appropriate.'''
@@ -42,13 +41,16 @@ cdef class Deme:
     # Otherwise random number generator breaks down.
     # Include selection too
 
-    cdef readonly Individual[:] members
-    cdef readonly long num_alleles
-    cdef readonly long[:] binned_alleles
-    cdef readonly long num_individuals
-    cdef readonly double fraction_swap
-    cdef public Deme[:] neighbors
-    cdef readonly double[:] growth_rate_list
+    cdef:
+        readonly Individual[:] members
+        readonly long num_alleles
+        readonly long[:] binned_alleles
+        readonly long num_individuals
+        readonly double fraction_swap
+        public Deme[:] neighbors
+        readonly double[:] growth_rate_list
+        readonly int num_iterations
+        readonly TIME_PER_ITERATION
 
     def __init__(Deme self,  long num_alleles, Individual[:] members not None, double fraction_swap = 0.0):
         self.members = members
@@ -58,6 +60,9 @@ cdef class Deme:
         self.fraction_swap = fraction_swap
 
         self.neighbors=None
+        # The first iteration has num_iterations = 0
+        self.num_iterations = -1
+        self.TIME_PER_ITERATION = 1./self.num_individuals
 
         # Initialize the growth rate array
         cdef Individual ind
@@ -67,6 +72,8 @@ cdef class Deme:
         self.growth_rate_list = np.array(temp_growth_list, dtype = np.double)
 
     cdef reproduce_die_step(Deme self, gsl_rng *r):
+
+        self.num_iterations +=1
 
         cdef unsigned int to_reproduce = self.get_reproduce(r)
         cdef unsigned int to_die = self.get_die(r)
@@ -171,35 +178,39 @@ cdef class Selection_Deme(Deme):
 
     # There is no increased probability to die in this model; don't have to adjust that
 
-cdef class Ratchet_Deme(Deme):
-    # We have to implement mutation now. Mutation occurs at a rate
-    # different than birth/death, so we need to include something different.
-    # Perhaps we should have the rate in generations...and do a mutation that often.
-    cdef unsigned long int get_reproduce(Ratchet_Deme self, gsl_rng *r):
-            '''We implement selection here. There is a higher chance to reproduce.'''
-            cdef double rand_num = gsl_rng_uniform(r)
+cdef class Selection_Ratchet_Deme(Selection_Deme):
 
-            cdef double cur_sum = 0
-            cdef unsigned int index = 0
+    cdef:
+        readonly double mutation_rate
+        readonly double s
+        readonly double mutations_per_iteration
+        readonly double mutation_remainder
+        readonly double mutation_count
 
-            # Normalize the fitnesses
-            cdef double[:] normalized_weights = self.growth_rate_list / np.sum(self.growth_rate_list)
+    def __init__(self, *args, mutation_rate = 1.0, s=0.01, **kwargs):
+        super(Selection_Ratchet_Deme, self).__init__(*args, **kwargs)
+        self.mutation_rate = mutation_rate
+        self.s = s
 
-            cdef double normalized_sum = 0
+        self.mutations_per_iteration = self.mutation_rate * self.TIME_PER_ITERATION
+        self.mutation_remainder = 0
+        self.mutation_count = 0
 
-            for index in range(self.num_individuals):
-                cur_sum += normalized_weights[index]
-
-                if cur_sum > rand_num:
-                    return index
-
-            return -1
-
-    cdef reproduce_die_step(Ratchet_Deme self, gsl_rng *r):
+    # We need to add mutation to the
+    cdef reproduce_die_step(Selection_Ratchet_Deme self, gsl_rng *r):
         # Reproduce and die as usual.'''
-        super(Ratchet_Deme, self).reproduce_die_step(r)
+        super(Selection_Ratchet_Deme, self).reproduce_die_step(r)
         # Now implement mutation; choose to do it depending on the fractional generation
-        # cur_gen in a deme should have this information...right?
+
+        self.mutation_remainder += self.mutations_per_iteration
+        while self.mutation_remainder >= 1:
+            self.mutate()
+            self.mutation_remainder -= 1
+            self.mutation_count += 1
+
+    cdef mutate(Selection_Ratchet_Deme self, gsl_rng *r):
+        print 'wakabaka'
+
 
 
 cdef class Simulate_Deme:
