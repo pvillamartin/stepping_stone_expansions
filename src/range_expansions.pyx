@@ -122,7 +122,6 @@ cdef class Deme:
         self.members[self_swap_index] = other_swap
         other.members[other_swap_index] = self_swap
 
-        # TODO Check that selection is updated appropriately
         cdef:
             other_fitness = other.growth_rate_list[other_swap_index]
             double self_fitness  = self.growth_rate_list[self_swap_index]
@@ -170,6 +169,37 @@ cdef class Selection_Deme(Deme):
 
     # There is no increased probability to die in this model; don't have to adjust that
 
+cdef class Ratchet_Deme(Deme):
+    # We have to implement mutation now. Mutation occurs at a rate
+    # different than birth/death, so we need to include something different.
+    # Perhaps we should have the rate in generations...and do a mutation that often.
+    cdef unsigned long int get_reproduce(Ratchet_Deme self, gsl_rng *r):
+            '''We implement selection here. There is a higher chance to reproduce.'''
+            cdef double rand_num = gsl_rng_uniform(r)
+
+            cdef double cur_sum = 0
+            cdef unsigned int index = 0
+
+            # Normalize the fitnesses
+            cdef double[:] normalized_weights = self.growth_rate_list / np.sum(self.growth_rate_list)
+
+            cdef double normalized_sum = 0
+
+            for index in range(self.num_individuals):
+                cur_sum += normalized_weights[index]
+
+                if cur_sum > rand_num:
+                    return index
+
+            return -1
+
+    cdef reproduce_die_step(Ratchet_Deme self, gsl_rng *r):
+        # Reproduce and die as usual.'''
+        super(Ratchet_Deme, self).reproduce_die_step(r)
+        # Now implement mutation; choose to do it depending on the fractional generation
+        # cur_gen in a deme should have this information...right?
+
+
 cdef class Simulate_Deme:
     cdef readonly Deme deme
     cdef readonly long num_generations
@@ -180,10 +210,12 @@ cdef class Simulate_Deme:
     cdef readonly unsigned int num_iterations
     cdef readonly double record_every_fracgen
     cdef readonly unsigned int record_every
+    cdef readonly double cur_gen
 
     def __init__(Simulate_Deme self, Deme deme, long num_generations,
                  unsigned long int seed = 0, double record_every_fracgen = -1.0):
 
+        self.cur_gen = 0
         self.deme = deme
         self.num_generations = num_generations
         self.seed = seed
@@ -217,9 +249,12 @@ cdef class Simulate_Deme:
         cdef long cur_num_individuals = self.deme.num_individuals
         cdef unsigned int count = 0
 
+        cdef double generations_per_step = 1./self.deme.num_individuals
+
         for i in range(self.num_iterations):
+            self.cur_gen = float(i)/self.deme.num_individuals
             if (i % self.record_every) == 0:
-                self.fractional_generation[count] = float(i)/self.deme.num_individuals
+                self.fractional_generation[count] = self.cur_gen
                 self.history[count, :] = self.deme.binned_alleles
                 count += 1
 
@@ -248,6 +283,7 @@ cdef class Simulate_Deme_Line:
 
     cdef readonly long[:,:,:] history
     cdef readonly double[:] frac_gen
+    cdef readonly double cur_gen
 
     def __init__(Simulate_Deme_Line self, Deme[:] initial_deme_list, long num_alleles=2,
         long num_generations=100, double fraction_swap=0.1, double record_every = 1.0, unsigned long int seed=0,
@@ -258,6 +294,8 @@ cdef class Simulate_Deme_Line:
         We assume m is the same for each deme, each deme has the same population,
         and that there is a known finite number of alleles at the start
         '''
+
+        self.cur_gen = 0
 
         self.initial_deme_list = initial_deme_list.copy()
         self.deme_list = initial_deme_list
@@ -367,7 +405,6 @@ cdef class Simulate_Deme_Line:
 
         # Only useful when you swap more than once per iteration
         cdef double num_times_to_swap = 1.0/swap_every
-        cdef int cur_gen
 
         # Use fast random number generation in mission critical methods
         # Make sure to delete this at the end to avoid memory leaks...
@@ -387,10 +424,11 @@ cdef class Simulate_Deme_Line:
         for i in range(self.num_iterations):
             # Bookkeeping
             swap_count += 1 # So at the start of the loop this has a minimum of 1
+            self.cur_gen = float(i)/self.num_individuals
 
             # Record every "record_every"
             if (i % record_every_iter == 0) or (i == (self.num_iterations - 1)):
-                self.frac_gen[num_times_recorded] = float(i) / self.num_individuals
+                self.frac_gen[num_times_recorded] = self.cur_gen
                 for d_num in range(self.num_demes):
                     self.history[num_times_recorded, d_num, :] = self.deme_list[d_num].binned_alleles
                 num_times_recorded += 1
