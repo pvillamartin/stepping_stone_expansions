@@ -1,6 +1,6 @@
 #cython: profile=False
-#cython: boundscheck=False
-#cython: initializedcheck=False
+#cython: boundscheck=True
+#cython: initializedcheck=True
 #cython: nonecheck=False
 #cython: wraparound=False
 #cython: cdivision=True
@@ -31,7 +31,7 @@ cdef class Individual:
         # Note that all rates should be non-dimensionalized in terms of generation time
         readonly double growth_rate
 
-    def __init__(Individual self, long allele_id, growth_rate = 1.0, mutation_rate = 0.0):
+    def __init__(Individual self, long allele_id = 0, growth_rate = 1.0):
         self.allele_id = allele_id
         self.growth_rate = growth_rate
 
@@ -155,6 +155,9 @@ cdef class Deme:
 
 cdef class Selection_Deme(Deme):
 
+    def __init__(Selection_Deme self, *args, **kwargs):
+        Deme.__init__(self, *args, **kwargs)
+
     # The only thing we have to update is the reproduce/die weighting function with selection
     cdef unsigned long int get_reproduce(Selection_Deme self, gsl_rng *r):
         '''We implement selection here. There is a higher chance to reproduce.'''
@@ -187,8 +190,8 @@ cdef class Selection_Ratchet_Deme(Selection_Deme):
         readonly double mutation_remainder
         readonly double mutation_count
 
-    def __init__(self, *args, mutation_rate = 1.0, s=0.01, **kwargs):
-        super(Selection_Ratchet_Deme, self).__init__(*args, **kwargs)
+    def __init__(Selection_Ratchet_Deme self, *args, mutation_rate = 1.0, s=0.01, **kwargs):
+        Selection_Deme.__init__(self, *args, **kwargs)
         self.mutation_rate = mutation_rate
         self.s = s
 
@@ -199,19 +202,23 @@ cdef class Selection_Ratchet_Deme(Selection_Deme):
     # We need to add mutation to the
     cdef reproduce_die_step(Selection_Ratchet_Deme self, gsl_rng *r):
         # Reproduce and die as usual.'''
-        super(Selection_Ratchet_Deme, self).reproduce_die_step(r)
+        Selection_Deme.reproduce_die_step(self, r)
         # Now implement mutation; choose to do it depending on the fractional generation
 
         self.mutation_remainder += self.mutations_per_iteration
         while self.mutation_remainder >= 1:
-            self.mutate()
+            self.mutate(r)
             self.mutation_remainder -= 1
             self.mutation_count += 1
 
     cdef mutate(Selection_Ratchet_Deme self, gsl_rng *r):
-        print 'wakabaka'
+        '''Choose an individual at random to mutate.'''
+        cdef unsigned int index_to_mutate = gsl_rng_uniform_int(r, self.num_individuals)
 
-
+        # Update the individual and the selection list
+        cdef Individual member_to_mutate = self.members[index_to_mutate]
+        member_to_mutate.growth_rate *= (1-self.s)
+        self.growth_rate_list[index_to_mutate] *= (1 - self.s)
 
 cdef class Simulate_Deme:
     cdef readonly Deme deme
@@ -219,6 +226,7 @@ cdef class Simulate_Deme:
     cdef readonly unsigned long int seed
 
     cdef readonly long[:,:] history
+    cdef readonly double[:, :] fitness_history
     cdef readonly double[:] fractional_generation
     cdef readonly unsigned int num_iterations
     cdef readonly double record_every_fracgen
@@ -247,6 +255,7 @@ cdef class Simulate_Deme:
 
         self.fractional_generation = -1*np.ones(num_to_record, dtype=np.double)
         self.history = -1*np.ones((num_to_record, deme.num_alleles), dtype=np.long)
+        self.fitness_history = -1*np.ones((num_to_record, deme.num_individuals), dtype=np.double)
 
     cpdef simulate(Simulate_Deme self):
 
@@ -269,6 +278,7 @@ cdef class Simulate_Deme:
             if (i % self.record_every) == 0:
                 self.fractional_generation[count] = self.cur_gen
                 self.history[count, :] = self.deme.binned_alleles
+                self.fitness_history[count, :] = self.deme.growth_rate_list
                 count += 1
 
             self.deme.reproduce_die_step(r)
