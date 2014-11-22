@@ -23,7 +23,9 @@ from cython_gsl cimport *
 from libc.stdlib cimport free
 
 cdef class Individual:
-    '''All individuals have the same motility and mutation rate for now, but can have different selective advantages.'''
+    '''We assume all individuals have the same mutation rate; this is implemented at the
+    deme level, consequently. It is very annoying otherwise, as we have to worry about other scales...'''
+
     cdef readonly long allele_id
     # Note that all rates should be non-dimensionalized in terms of generation time
     cdef readonly double growth_rate
@@ -36,29 +38,26 @@ cdef class Individual:
 
 cdef class Deme:
     '''The neutral deme. Initiate selection deme or selection_mutation deme as appropriate.'''
-# Assumes population in each deme is fixed!
-# Otherwise random number generator breaks down.
-# Include selection too
+    # Assumes population in each deme is fixed!
+    # Otherwise random number generator breaks down.
+    # Include selection too
 
-    cdef:
-        readonly Individual[:] members
-        readonly long num_alleles
-        readonly long[:] binned_alleles
-        readonly long num_individuals
-        readonly double[:] growth_rate_list
-        readonly double mutate_every # Time between each mutation
-        readonly double cur_gen
+    cdef readonly Individual[:] members
+    cdef readonly long num_alleles
+    cdef readonly long[:] binned_alleles
+    cdef readonly long num_individuals
+    cdef readonly double fraction_swap
+    cdef public Deme[:] neighbors
+    cdef readonly double[:] growth_rate_list
 
-    def __init__(Deme self,  long num_alleles, Individual[:] members not None):
+    def __init__(Deme self,  long num_alleles, Individual[:] members not None, double fraction_swap = 0.0):
         self.members = members
         self.num_individuals = len(members)
         self.num_alleles = num_alleles
         self.binned_alleles = self.bin_alleles()
+        self.fraction_swap = fraction_swap
 
         self.neighbors=None
-
-        self.cur_gen = 0
-        self.TIME_PER_ITERATION = 1./self.num_individuals
 
         # Initialize the growth rate array
         cdef Individual ind
@@ -67,14 +66,7 @@ cdef class Deme:
             temp_growth_list.append(ind.growth_rate)
         self.growth_rate_list = np.array(temp_growth_list, dtype = np.double)
 
-        # Setup swapping parameters
-        if self.frac_swap == 0:
-            self.swap_every = -1.0
-        else:
-            self.swap_every = 1.0/(self.frac_swap * self.num_individuals)
-
     cdef reproduce_die_step(Deme self, gsl_rng *r):
-        '''Time is scaled by reproduction steps. So do everything relative to that.'''
 
         cdef unsigned int to_reproduce = self.get_reproduce(r)
         cdef unsigned int to_die = self.get_die(r)
@@ -101,55 +93,12 @@ cdef class Deme:
         cdef Individual reproducer = self.members[to_reproduce]
         self.members[to_die] = reproducer
 
-        #### Deal with swapping ######
-        cdef Deme d
-
-        if self.swap_every != -1.0:
-
-            if self.swap_every >= self.TIME_PER_ITERATION:
-                for d in self.neighbors:
-                    self.swap_members(d, r)
-
-
-            if (self.cur_gen != 0) and (self.cur_gen % self.swap_every)
-            # Only useful when you swap more than once per iteration
-            cdef double num_times_to_swap = 1.0/swap_every
-
-            cdef unsigned int i
-
-            swap_count += 1 # So at the start of the loop this has a minimum of 1
-
-
-
-            # Swap when appropriate
-            if swap_every >= 2: # Swap less frequently than reproduction
-                if swap_count >= swap_every:
-                    swap_count = 0
-                    num_times_swapped += 1
-                    self.swap_with_neighbors(r)
-
-            elif swap_every > 0: # Swap more frequently than reproduction
-                while swap_count <= num_times_to_swap:
-                    self.swap_with_neighbors(r)
-                    swap_count += 1
-                    num_times_swapped += 1
-
-                #swap_count will always be too high as you just exited the for loop
-                remainder += num_times_to_swap - (swap_count - 1)
-                swap_count = 0
-                if remainder >= 1:
-                    remainder -= 1
-                    self.swap_with_neighbors(r)
-                    num_times_swapped += 1
-
-        # Update the generation
-        self.cur_gen += 1./self.num_individuals
-
     cdef unsigned long int get_reproduce(Deme self, gsl_rng *r):
         return gsl_rng_uniform_int(r, self.num_individuals)
 
     cdef unsigned long int get_die(Deme self, gsl_rng *r):
         return gsl_rng_uniform_int(r, self.num_individuals)
+
 
     cdef swap_members(Deme self, Deme other, gsl_rng *r):
         cdef:
@@ -178,7 +127,6 @@ cdef class Deme:
         cdef:
             other_fitness = other.growth_rate_list[other_swap_index]
             double self_fitness  = self.growth_rate_list[self_swap_index]
-
         self.growth_rate_list[self_swap_index] = other_fitness
         self.growth_rate_list[other_swap_index] = self_fitness
 
@@ -363,6 +311,7 @@ cdef class Simulate_Deme_Line:
 
         self.num_alleles = num_alleles
         self.num_generations = num_generations
+        self.fraction_swap = fraction_swap
         self.record_every = record_every
         self.debug = debug
 
