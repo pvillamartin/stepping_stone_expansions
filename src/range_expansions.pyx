@@ -53,7 +53,7 @@ cdef class Deme:
         readonly TIME_PER_ITERATION
 
     def __init__(Deme self,  long num_alleles, Individual[:] members not None, double fraction_swap = 0.0):
-        self.members = members2
+        self.members = members
         self.num_individuals = len(members)
         self.num_alleles = num_alleles
         self.binned_alleles = self.bin_alleles()
@@ -193,11 +193,13 @@ cdef class Selection_Ratchet_Deme(Selection_Deme):
         readonly double mutations_per_iteration
         readonly double mutation_remainder
         readonly double mutation_count
+        readonly double min_s
 
-    def __init__(Selection_Ratchet_Deme self, *args, mutation_rate = 1.0, s=0.01, **kwargs):
+    def __init__(Selection_Ratchet_Deme self, *args, mutation_rate = 1.0, s=0.01, min_s = 10.**-300., **kwargs):
         Selection_Deme.__init__(self, *args, **kwargs)
         self.mutation_rate = mutation_rate
         self.s = s
+        self.min_s = min_s
 
         self.mutations_per_iteration = self.mutation_rate * self.TIME_PER_ITERATION
         self.mutation_remainder = 0
@@ -221,7 +223,9 @@ cdef class Selection_Ratchet_Deme(Selection_Deme):
         # Update the individual and the selection list
         cdef Individual member_to_mutate = self.members[index_to_mutate]
         member_to_mutate.growth_rate *= (1-self.s)
-        self.growth_rate_list[index_to_mutate] *= (1 - self.s)
+        if member_to_mutate.growth_rate < self.min_s:
+            member_to_mutate.growth_rate = self.min_s
+        self.growth_rate_list[index_to_mutate] = member_to_mutate.growth_rate
 
 cdef class Simulate_Deme:
     cdef readonly Deme deme
