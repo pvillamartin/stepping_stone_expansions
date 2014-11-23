@@ -1,6 +1,6 @@
 #cython: profile=False
-#cython: boundscheck=True
-#cython: initializedcheck=True
+#cython: boundscheck=False
+#cython: initializedcheck=False
 #cython: nonecheck=False
 #cython: wraparound=False
 #cython: cdivision=True
@@ -53,7 +53,7 @@ cdef class Deme:
         readonly TIME_PER_ITERATION
 
     def __init__(Deme self,  long num_alleles, Individual[:] members not None, double fraction_swap = 0.0):
-        self.members = members
+        self.members = members2
         self.num_individuals = len(members)
         self.num_alleles = num_alleles
         self.binned_alleles = self.bin_alleles()
@@ -177,6 +177,10 @@ cdef class Selection_Deme(Deme):
             if cur_sum > rand_num:
                 return index
 
+        print np.array(self.growth_rate_list)
+        print np.array(normalized_weights)
+        print 'Selection sampling has exploded!'
+        print 'Returning -1...something bad is going to happen.'
         return -1
 
     # There is no increased probability to die in this model; don't have to adjust that
@@ -204,7 +208,6 @@ cdef class Selection_Ratchet_Deme(Selection_Deme):
         # Reproduce and die as usual.'''
         Selection_Deme.reproduce_die_step(self, r)
         # Now implement mutation; choose to do it depending on the fractional generation
-
         self.mutation_remainder += self.mutations_per_iteration
         while self.mutation_remainder >= 1:
             self.mutate(r)
