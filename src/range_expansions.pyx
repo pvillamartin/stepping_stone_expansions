@@ -311,6 +311,7 @@ cdef class Simulate_Deme_Line:
     cdef readonly bool debug
     cdef readonly unsigned long int seed
 
+    cdef readonly double[:,:,:] fitness_history
     cdef readonly long[:,:,:] history
     cdef readonly double[:] frac_gen
     cdef readonly double cur_gen
@@ -354,8 +355,8 @@ cdef class Simulate_Deme_Line:
             print 'Invalid length from walls is ~' , invalid_length
 
         self.num_iterations = self.num_generations * self.num_individuals + 1
-        self.history = np.empty((num_records, self.num_demes, num_alleles), dtype=np.long)
-
+        self.history = -1*np.ones((num_records, self.num_demes, num_alleles), dtype=np.long)
+        self.fitness_history = -1*np.ones((num_records, self.num_demes, self.num_individuals), dtype=np.double)
         # Don't forget to link the demes!
 
         self.link_demes()
@@ -461,6 +462,7 @@ cdef class Simulate_Deme_Line:
                 self.frac_gen[num_times_recorded] = self.cur_gen
                 for d_num in range(self.num_demes):
                     self.history[num_times_recorded, d_num, :] = self.deme_list[d_num].binned_alleles
+                    self.fitness_history[num_times_recorded, d_num, :] = self.deme_list[d_num].growth_rate_list
                 num_times_recorded += 1
 
             # Reproduce
@@ -590,6 +592,10 @@ cdef class Simulate_Deme_Line:
             pixels[i, :] = fractional_history[i, :, allele_num]
 
         return pixels
+
+    def get_fitness_history(Simulate_Deme_Line self):
+        fit = np.array(self.fitness_history)
+        return fit.mean(axis=2)
 
     def get_color_array(Simulate_Deme_Line self):
 
