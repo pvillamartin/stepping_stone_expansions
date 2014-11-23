@@ -177,8 +177,6 @@ cdef class Selection_Deme(Deme):
             if cur_sum > rand_num:
                 return index
 
-        print np.array(self.growth_rate_list)
-        print np.array(normalized_weights)
         print 'Selection sampling has exploded!'
         print 'Returning -1...something bad is going to happen.'
         return -1
