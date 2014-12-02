@@ -209,6 +209,7 @@ cdef class Selection_Ratchet_Deme(Selection_Deme):
         Selection_Deme.reproduce_die_step(self, r)
         # Now implement mutation; choose to do it depending on the fractional generation
         self.mutation_remainder += self.mutations_per_iteration
+        ## TODO Make the individual who is born have the mutation...not someone at random
         while self.mutation_remainder >= 1:
             self.mutate(r)
             self.mutation_remainder -= 1
@@ -216,6 +217,7 @@ cdef class Selection_Ratchet_Deme(Selection_Deme):
 
     cdef mutate(Selection_Ratchet_Deme self, gsl_rng *r):
         '''Choose an individual at random to mutate.'''
+        #TODO: Figure out if this needs Poisson weighting
         cdef unsigned int index_to_mutate = gsl_rng_uniform_int(r, self.num_individuals)
 
         # Update the individual and the selection list
