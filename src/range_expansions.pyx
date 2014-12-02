@@ -52,6 +52,9 @@ cdef class Deme:
         readonly int num_iterations
         readonly TIME_PER_ITERATION
 
+        readonly int last_index_to_die
+        readonly int last_index_to_reproduce
+
     def __init__(Deme self,  long num_alleles, Individual[:] members not None, double fraction_swap = 0.0):
         self.members = members
         self.num_individuals = len(members)
@@ -63,6 +66,9 @@ cdef class Deme:
         # The first iteration has num_iterations = 0
         self.num_iterations = -1
         self.TIME_PER_ITERATION = 1./self.num_individuals
+
+        self.last_index_to_die = -1
+        self.last_index_to_reproduce = -1
 
         # Initialize the growth rate array
         cdef Individual ind
@@ -99,6 +105,10 @@ cdef class Deme:
         # it doesn't seem to work otherwise
         cdef Individual reproducer = self.members[to_reproduce]
         self.members[to_die] = reproducer
+
+        # Keep track of who reproduced and who died
+        self.last_index_to_die = to_die
+        self.last_index_to_reproduce = to_reproduce
 
     cdef unsigned long int get_reproduce(Deme self, gsl_rng *r):
         return gsl_rng_uniform_int(r, self.num_individuals)
@@ -184,22 +194,22 @@ cdef class Selection_Deme(Deme):
     # There is no increased probability to die in this model; don't have to adjust that
 
 cdef class Selection_Ratchet_Deme(Selection_Deme):
-
+    '''The mutation probability is the probability to have a mutation per birth'''
     cdef:
-        readonly double mutation_rate
+        readonly double mutation_probability
         readonly double s
         readonly double mutations_per_iteration
         readonly double mutation_remainder
         readonly double mutation_count
         readonly double min_s
 
-    def __init__(Selection_Ratchet_Deme self, *args, mutation_rate = 1.0, s=0.01, min_s = 10.**-300., **kwargs):
+    def __init__(Selection_Ratchet_Deme self, *args, mutation_probability = 0.1, s=0.01, min_s = 10.**-300., **kwargs):
         Selection_Deme.__init__(self, *args, **kwargs)
-        self.mutation_rate = mutation_rate
+        self.mutation_probability = mutation_probability
         self.s = s
         self.min_s = min_s
 
-        self.mutations_per_iteration = self.mutation_rate * self.TIME_PER_ITERATION
+        self.mutations_per_iteration = self.mutation_probability * self.TIME_PER_ITERATION
         self.mutation_remainder = 0
         self.mutation_count = 0
 
@@ -207,18 +217,16 @@ cdef class Selection_Ratchet_Deme(Selection_Deme):
     cdef reproduce_die_step(Selection_Ratchet_Deme self, gsl_rng *r):
         # Reproduce and die as usual.'''
         Selection_Deme.reproduce_die_step(self, r)
-        # Now implement mutation; choose to do it depending on the fractional generation
-        self.mutation_remainder += self.mutations_per_iteration
-        ## TODO Make the individual who is born have the mutation...not someone at random
-        while self.mutation_remainder >= 1:
+        # Now implement mutation: assume at most one mutation per birth for now
+        cdef double roll = gsl_rng_uniform(r)
+
+        if roll < self.mutation_probability:
             self.mutate(r)
-            self.mutation_remainder -= 1
             self.mutation_count += 1
 
     cdef mutate(Selection_Ratchet_Deme self, gsl_rng *r):
-        '''Choose an individual at random to mutate.'''
-        #TODO: Figure out if this needs Poisson weighting
-        cdef unsigned int index_to_mutate = gsl_rng_uniform_int(r, self.num_individuals)
+        '''Choose the individual that replaced the one who died to mutate.'''
+        cdef unsigned int index_to_mutate = self.last_index_to_die
 
         # Update the individual and the selection list
         cdef Individual member_to_mutate = self.members[index_to_mutate]
