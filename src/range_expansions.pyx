@@ -361,15 +361,20 @@ cdef class Simulate_Deme_Line:
 
     def link_demes(Simulate_Deme_Line self):
         '''Set up the network structure; make sure not to double count!
-        Create periodic or line BC's here, your choice'''
+        Create periodic or line BC's here, your choice.'''
 
         cdef long i
 
+        # You must have neighbors on left & right or bizarre things happen...
+        cdef long max_index = self.num_demes -1
+
         for i in range(self.num_demes):
-            if i != (self.num_demes - 1):
-                self.deme_list[i].neighbors = np.array([self.deme_list[i + 1]], dtype=Deme)
+            if i == max_index:
+                self.deme_list[i].neighbors = np.array([self.deme_list[0], self.deme_list[i - 1]], dtype=Deme)
+            elif i== 0:
+                self.deme_list[i].neighbors = np.array([self.deme_list[max_index], self.deme_list[i+1]], dtype=Deme)
             else:
-                self.deme_list[i].neighbors = np.array([self.deme_list[0]], dtype=Deme)
+                self.deme_list[i].neighbors = np.array([self.deme_list[i - 1], self.deme_list[i + 1]], dtype=Deme)
 
     cdef swap_with_neighbors(Simulate_Deme_Line self, gsl_rng *r):
         '''Be careful not to double swap! Each deme swaps once per edge.'''
@@ -386,35 +391,35 @@ cdef class Simulate_Deme_Line:
         gsl_permutation_init (p)
         gsl_ran_shuffle(r, p.data, N, sizeof(size_t))
 
-        cdef size_t *p_data = gsl_permutation_data(p)
+        cdef:
+            size_t *p_data = gsl_permutation_data(p)
 
-        # Swap between all the neighbors once choosing the order randomly
-        cdef int i
-        cdef int j
+            # Swap between all the neighbors once choosing the order randomly
+            int i
 
-        cdef int self_swap_index, other_swap_index
-        cdef Deme otherDeme
-        cdef int num_neighbors
+            int self_swap_index, other_swap_index
+            Deme otherDeme
+            int num_neighbors
 
-        cdef int current_perm_index
+            int current_perm_index
+            int neighbor_choice
 
-        for i in range(N):
+        for i in range(self.num_demes):
             current_perm_index = p_data[i]
             current_deme = self.deme_list[current_perm_index]
             neighbors = current_deme.neighbors
             num_neighbors = neighbors.shape[0]
-            for j in range(num_neighbors):
-                otherDeme = neighbors[j]
-                current_deme.swap_members(otherDeme, r)
+            # Choose a neighbor at random to swap with
+            neighbor_choice = gsl_rng_uniform_int(r, num_neighbors)
+            otherDeme = neighbors[neighbor_choice]
+
+            current_deme.swap_members(otherDeme, r)
 
         gsl_permutation_free(p)
 
     cdef reproduce_line(Simulate_Deme_Line self, gsl_rng *r):
         cdef int d_num
-        cdef long[:] current_alleles
         cdef Deme tempDeme
-
-        cdef unsigned long int to_reproduce, to_die
 
         for d_num in range(self.num_demes):
             tempDeme = self.deme_list[d_num]
