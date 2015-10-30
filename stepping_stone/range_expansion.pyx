@@ -26,7 +26,7 @@ cdef class Individual:
 
     cdef:
         # Note that all rates should be non-dimensionalized in terms of generation time
-        readonly long allele_id     # Basically a marker for color
+        readonly long allele_id     # Basically a marker for color. If there are q alleles, the allele indices must be [0, 1, ..., q-1]
         readonly double growth_rate # Growth rate is only used if we include selection, i.e. selection demes
 
     def __init__(Individual self, long allele_id = 0, growth_rate = 1.0):
@@ -36,7 +36,8 @@ cdef class Individual:
 cdef class Deme:
     """
     The neutral deme. Individuals are placed in demes via the "members" memoryview. We currently
-    assume that the population size "num_individuals" is fixed.
+    assume that the population size "num_individuals" is fixed. We ignore mutation, selection, etc.
+    Creating those parameters and placing them in a neutral deme will do nothing.
     """
 
     cdef:
@@ -66,12 +67,11 @@ cdef class Deme:
         self.fraction_swap = fraction_swap
 
         self.neighbors=None
-        # The first iteration has num_iterations = 0
-        self.num_iterations = -1
+        self.num_iterations = -1 # First iteration has a value of zero
         self.TIME_PER_ITERATION = 1./self.num_individuals
 
-        self.last_index_to_die = -1
-        self.last_index_to_reproduce = -1
+        self.last_index_to_die = None # garbage value
+        self.last_index_to_reproduce = None # garbage value
 
         # Initialize the growth rate array
         cdef Individual ind
@@ -80,7 +80,12 @@ cdef class Deme:
             temp_growth_list.append(ind.growth_rate)
         self.growth_rate_list = np.array(temp_growth_list, dtype = np.double)
 
-    cdef reproduce_die_step(Deme self, gsl_rng *r):
+    cdef void reproduce_die_step(Deme self, gsl_rng *r):
+        """
+        Choose an individual to reproduce and an individual to die. Make them do so, update accordingly.
+
+        :param r: from cython_gsl, random number generator. Used for fast random number generation
+        """
 
         self.num_iterations +=1
 
@@ -114,13 +119,29 @@ cdef class Deme:
         self.last_index_to_reproduce = to_reproduce
 
     cdef unsigned long int get_reproduce(Deme self, gsl_rng *r):
+        """
+        Choose an indiviual to reproduce randomly. Important for subclassing.
+        :param r: from cython_gsl, random number generator. Used for fast random number generation.
+        :return:  The index of the individual to reproduce in the members memoryview.
+        """
         return gsl_rng_uniform_int(r, self.num_individuals)
 
     cdef unsigned long int get_die(Deme self, gsl_rng *r):
+        """
+        Choose an individual to die randomly. Important for subclassing.
+        :param r: from cython_gsl, random number generator. Used for fast random number generation.
+        :return: The index of the individual to die in the members memoryview.
+        """
         return gsl_rng_uniform_int(r, self.num_individuals)
 
 
-    cdef swap_members(Deme self, Deme other, gsl_rng *r):
+    cdef void swap_members(Deme self, Deme other, gsl_rng *r):
+        """
+        Swaps an individual randomly with another deme. Important for subclassing.
+
+        :param other: The deme you are going to swap with.
+        :param r: from cython_gsl, random number generator. Used for fast random number generation.
+        """
         cdef:
             int i
 
@@ -144,36 +165,59 @@ cdef class Deme:
         self.members[self_swap_index] = other_swap
         other.members[other_swap_index] = self_swap
 
-        cdef:
-            other_fitness = other.growth_rate_list[other_swap_index]
-            double self_fitness  = self.growth_rate_list[self_swap_index]
+        ## Update growth rates
+        cdef other_fitness = other.growth_rate_list[other_swap_index]
+        cdef double self_fitness  = self.growth_rate_list[self_swap_index]
         self.growth_rate_list[self_swap_index] = other_fitness
         self.growth_rate_list[other_swap_index] = self_fitness
 
     cdef unsigned long int get_swap_index(Deme self, gsl_rng *r):
+        """
+        Randomly chooses which individual to swap.
+        :param r: from cython_gsl, random number generator. Used for fast random number generation.
+        :return: index of the individual to swap.
+        """
         return gsl_rng_uniform_int(r, self.num_individuals)
 
     cpdef get_alleles(Deme self):
+        """
+        A helper function to get the allele of each individual currently in the system.
+        :return: A list of alleles
+        """
         return [individual.allele_id for individual in self.members]
 
     cdef bin_alleles(Deme self):
+        """
+        :return: the number of type 0 alleles in index 0 of an array, number of type 1 alleles in index 1, etc.
+        """
         return np.bincount(self.get_alleles(), minlength=self.num_alleles)
 
     cpdef check_allele_frequency(Deme self):
-        '''A diagnostic test that makes sure that the result returned by
-        bin_alleles is the same as the current allele frequency. If it is false,
-        there is a problem in the code somewhere.'''
+        """
+        A diagnostic test that makes sure that the result returned by bin_alleles is the same as the current
+        allele frequency. If it is false, there is a problem in the code somewhere.
+        :return: True if the allele frequency is what it should be based on current individuals.
+        """
 
         return np.array_equal(self.binned_alleles, self.bin_alleles())
 
 cdef class Selection_Deme(Deme):
+    """
+    A deme that implements selection. Growth rates are now important. A subclass of the neutral deme.
+    """
 
     def __init__(Selection_Deme self, *args, **kwargs):
         Deme.__init__(self, *args, **kwargs)
 
     # The only thing we have to update is the reproduce/die weighting function with selection
     cdef unsigned long int get_reproduce(Selection_Deme self, gsl_rng *r):
-        '''We implement selection here. There is a higher chance to reproduce.'''
+        """
+        Choose an individual to reproduce based on their growth rates. Faster growing individuals have a higher
+        chance to reproduce.
+
+        :param r: from cython_gsl, random number generator. Used for fast random number generation.
+        :return: Index of the individual to reproduce in the members array.
+        """
         cdef double rand_num = gsl_rng_uniform(r)
 
         cdef double cur_sum = 0
