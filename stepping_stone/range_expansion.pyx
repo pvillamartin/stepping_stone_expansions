@@ -70,8 +70,8 @@ cdef class Deme:
         self.num_iterations = -1 # First iteration has a value of zero
         self.TIME_PER_ITERATION = 1./self.num_individuals
 
-        self.last_index_to_die = None # garbage value
-        self.last_index_to_reproduce = None # garbage value
+        self.last_index_to_die = -1 # garbage value
+        self.last_index_to_reproduce = -1 # garbage value
 
         # Initialize the growth rate array
         cdef Individual ind
@@ -323,7 +323,7 @@ cdef class Simulate_Deme:
     ###########################
 
     def __init__(Simulate_Deme self, Deme deme, long num_generations,
-                 unsigned long int seed = 0, double record_every_fracgen = None):
+                 unsigned long int seed = 0, double record_every_fracgen = -1):
 
         self.cur_gen = 0
         self.deme = deme
@@ -331,7 +331,7 @@ cdef class Simulate_Deme:
         self.seed = seed
         self.record_every_fracgen = record_every_fracgen
 
-        if self.record_every_fracgen is None:
+        if self.record_every_fracgen == -1:
             self.record_every_fracgen = 1.
 
         # Calculate how many iterations you must wait before recording

@@ -5,7 +5,7 @@ import cython_gsl
 import numpy as np
 
 extensions = [
-    Extension("stepping_stone.range_expansion", sources=["stepping_stone/range_expansion.pyx"], language='c',
+    Extension("stepping_stone.range_expansion", sources=["stepping_stone/range_expansion.pyx"], language='c++',
               libraries = cython_gsl.get_libraries(),
               library_dirs = [cython_gsl.get_library_dir()],
               include_dirs = [cython_gsl.get_cython_include_dir(), np.get_include()])
