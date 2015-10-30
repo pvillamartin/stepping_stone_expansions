@@ -304,16 +304,16 @@ cdef class Simulate_Deme:
     """
 
     #### Inputs ####
-    cdef readonly Deme deme
-    cdef readonly long num_generations
+    cdef readonly Deme deme                     # The input deme.
+    cdef readonly long num_generations          # How many generations to make the simulation go
     cdef readonly unsigned long int seed        # Seed for the simulations. Must be between 0 and 2**32 - 1
     cdef readonly double record_every_fracgen   # How often (per generation) that you want to record
     ################
 
     #### Records of the simulation ####
-    cdef readonly long[:,:] history
-    cdef readonly double[:, :] fitness_history
-    cdef readonly double[:] fractional_generation
+    cdef readonly long[:,:] history             # The number of individuals with each allele vs. time
+    cdef readonly double[:, :] fitness_history  # The history of the population vs. time
+    cdef readonly double[:] fractional_generation   # The time of each recording.
     ###################################
 
     #### Helper attributes ####
@@ -346,7 +346,10 @@ cdef class Simulate_Deme:
         self.history = -1*np.ones((num_to_record, deme.num_alleles), dtype=np.long)
         self.fitness_history = -1*np.ones((num_to_record, deme.num_individuals), dtype=np.double)
 
-    cpdef simulate(Simulate_Deme self):
+    cpdef void simulate(Simulate_Deme self):
+        """
+        Simulates the deme's evolution for "num_generations."
+        """
 
         # Prepare random number generation
         np.random.seed(self.seed)
@@ -378,35 +381,39 @@ cdef class Simulate_Deme:
         gsl_rng_free(r)
 
 cdef class Simulate_Deme_Line:
+    """
+    Responsible for simulating the stepping stone model: a line of connected demes! We assume swapping rate is the
+    same for each deme, each deme has the same population, and that there is a known finite number of alleles at the
+    start.
+    """
 
-    cdef readonly Deme[:] initial_deme_list
-    cdef readonly Deme[:] deme_list
-    cdef readonly long num_demes
-    cdef readonly long num_individuals
-    cdef readonly long num_alleles
-    cdef readonly double fraction_swap
+    ####Input####
+    cdef readonly Deme[:] initial_deme_list     # The initial state of the simulation
+    cdef readonly Deme[:] deme_list             # The current state of the demes being evolved
+    cdef readonly long num_alleles              # The total number of alleles in the system initially
+    cdef readonly double fraction_swap          # How much of your population you swap with your neighbor each generation
+    cdef readonly long num_generations          # How many generations to run the simulation
+    cdef readonly double record_every           # How often to record the simulation state
+    cdef readonly unsigned long int seed        # Seed for the simulation
+    cdef readonly bool debug                    # A debug flag, useful for tracking down problems
+    #############
 
-    cdef readonly long num_generations
-    cdef readonly double record_every
-    cdef readonly unsigned int num_iterations
+    #### Outputs from the simulation ####
+    cdef readonly double[:,:,:] fitness_history # [Time, Deme, array of fitnesses]
+    cdef readonly long[:,:,:] history           # [Time, deme, array of binned alleles]
+    cdef readonly double[:] frac_gen            # The number of elapsed generations when recorded.
+    #####################################
 
-    cdef readonly bool debug
-    cdef readonly unsigned long int seed
-
-    cdef readonly double[:,:,:] fitness_history
-    cdef readonly long[:,:,:] history
-    cdef readonly double[:] frac_gen
+    #### Helper variables ####
     cdef readonly double cur_gen
+    cdef readonly long num_demes
+    cdef readonly long num_individuals # Assumes that the number of individuals per deme is constant!
+    cdef readonly unsigned int num_iterations
+    ##########################
 
     def __init__(Simulate_Deme_Line self, Deme[:] initial_deme_list, long num_alleles=2,
         long num_generations=100, double fraction_swap=0.1, double record_every = 1.0, unsigned long int seed=0,
         bool debug = False):
-        '''  The user should input the list of demes. It is too annoying otherwise. There can be a utility
-        function to generate common setups though.
-
-        We assume m is the same for each deme, each deme has the same population,
-        and that there is a known finite number of alleles at the start
-        '''
 
         self.cur_gen = 0
 
@@ -443,9 +450,10 @@ cdef class Simulate_Deme_Line:
 
         self.link_demes()
 
-    def link_demes(Simulate_Deme_Line self):
-        '''Set up the network structure; make sure not to double count!
-        Create periodic or line BC's here, your choice.'''
+    cpdef void link_demes(Simulate_Deme_Line self):
+        """
+        Set up the network structure.
+        """
 
         cdef long i
 
@@ -460,8 +468,15 @@ cdef class Simulate_Deme_Line:
             else:
                 self.deme_list[i].neighbors = np.array([self.deme_list[i - 1], self.deme_list[i + 1]], dtype=Deme)
 
-    cdef swap_with_neighbors(Simulate_Deme_Line self, gsl_rng *r):
-        '''Be careful not to double swap! Each deme swaps once per edge.'''
+    #TODO: Don't swap every neighbor at once, that is fraught with peril. Should do some sort of stochastic update...
+    cdef void swap_with_neighbors(Simulate_Deme_Line self, gsl_rng *r):
+        """
+        Loops through every deme on the line and randomly chooses a neighbor to swap with. This is a *terrible*
+        way to do things currently; it would be better if things were replaced with choosing a random deme to swap.
+
+        :param r: from cython_gsl, random number generator. Used for fast random number generation.
+        """
+
         cdef long[:] swap_order
         cdef long swap_index
         cdef Deme current_deme
