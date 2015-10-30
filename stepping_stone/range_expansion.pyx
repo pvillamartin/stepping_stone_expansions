@@ -12,48 +12,51 @@ __author__ = 'bryan'
 cimport cython
 import numpy as np
 cimport numpy as np
-import random
-import sys
 from libcpp cimport bool
 from matplotlib import animation
 import matplotlib.pyplot as plt
-import pandas as pd
 
 from cython_gsl cimport *
 from libc.stdlib cimport free
 
 cdef class Individual:
-    '''We assume all individuals have the same mutation rate; this is implemented at the
-    deme level, consequently. It is very annoying otherwise, as we have to worry about other scales...'''
+    """
+    Individuals are placed in demes.
+    """
 
     cdef:
-        readonly long allele_id
         # Note that all rates should be non-dimensionalized in terms of generation time
-        readonly double growth_rate
+        readonly long allele_id     # Basically a marker for color
+        readonly double growth_rate # Growth rate is only used if we include selection, i.e. selection demes
 
     def __init__(Individual self, long allele_id = 0, growth_rate = 1.0):
         self.allele_id = allele_id
         self.growth_rate = growth_rate
 
 cdef class Deme:
-    '''The neutral deme. Initiate selection deme or selection_mutation deme as appropriate.'''
-    # Assumes population in each deme is fixed!
-    # Otherwise random number generator breaks down.
-    # Include selection too
+    """
+    The neutral deme. Individuals are placed in demes via the "members" memoryview. We currently
+    assume that the population size "num_individuals" is fixed.
+    """
 
     cdef:
-        readonly Individual[:] members
-        readonly long num_alleles
-        readonly long[:] binned_alleles
-        readonly long num_individuals
-        readonly double fraction_swap
-        public Deme[:] neighbors
-        readonly double[:] growth_rate_list
-        readonly int num_iterations
-        readonly TIME_PER_ITERATION
+        ##### Inputs ####
+        readonly long num_alleles           # The number of alleles at the beginning of the simulation; assumes no creation of alleles
+        readonly Individual[:] members      # A list of individuals currently in the deme
+        readonly double fraction_swap       # The fraction of the individuals swapped with neighbors each generation
+        #################
 
-        readonly int last_index_to_die
-        readonly int last_index_to_reproduce
+        #### Other Attributes ######
+        readonly long[:] binned_alleles     # A count of each type of allele in the deme.
+        readonly long num_individuals       # The number of individuals in the deme, N; assumes this is fixed
+        public Deme[:] neighbors            # A list of neighboring demes. You have to initialize this.
+        readonly double[:] growth_rate_list # A list of growth rates in the deme. Important for dealing with selection
+        readonly int num_iterations         # The number of iterations the deme has undergone
+        readonly TIME_PER_ITERATION         # The time per generation is defined as 1/N; it is a constant, hence the capitals
+
+        readonly int last_index_to_die      # The index of the last member to die in the members list. Important for subclassing
+        readonly int last_index_to_reproduce # The index of the last member to reproduce in the members list. Important for subclassing.
+        ############################
 
     def __init__(Deme self,  long num_alleles, Individual[:] members not None, double fraction_swap = 0.0):
         self.members = members
