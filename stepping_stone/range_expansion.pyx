@@ -468,7 +468,6 @@ cdef class Simulate_Deme_Line:
             else:
                 self.deme_list[i].neighbors = np.array([self.deme_list[i - 1], self.deme_list[i + 1]], dtype=Deme)
 
-    #TODO: Don't swap every neighbor at once, that is fraught with peril. Should do some sort of stochastic update...
     cdef void swap_with_neighbors(Simulate_Deme_Line self, gsl_rng *r):
         """
         Loops through every deme on the line and randomly chooses a neighbor to swap with. This is a *terrible*
@@ -476,6 +475,8 @@ cdef class Simulate_Deme_Line:
 
         :param r: from cython_gsl, random number generator. Used for fast random number generation.
         """
+
+        #TODO: Don't swap every neighbor at once, that is fraught with peril. Probably need a new update step in this simulation...
 
         cdef long[:] swap_order
         cdef long swap_index
@@ -516,7 +517,11 @@ cdef class Simulate_Deme_Line:
 
         gsl_permutation_free(p)
 
-    cdef reproduce_line(Simulate_Deme_Line self, gsl_rng *r):
+    cdef void reproduce_line(Simulate_Deme_Line self, gsl_rng *r):
+        """
+        Loops over every deme on the line and makes them reproduce.
+        :param r:  from cython_gsl, random number generator. Used for fast random number generation.
+        """
         cdef int d_num
         cdef Deme tempDeme
 
@@ -524,13 +529,16 @@ cdef class Simulate_Deme_Line:
             tempDeme = self.deme_list[d_num]
             tempDeme.reproduce_die_step(r)
 
-    cpdef simulate(self):
+    cpdef void simulate(self):
+        """
+        Run the simulation.
+        """
 
         cdef double swap_every
         if self.fraction_swap == 0:
             swap_every = -1.0
         else:
-            swap_every = 1.0/self.fraction_swap
+            swap_every = 1.0/self.fraction_swap # When to swap
 
         cdef long swap_count = 0
         cdef long num_times_swapped = 0
@@ -567,6 +575,8 @@ cdef class Simulate_Deme_Line:
                     self.fitness_history[num_times_recorded, d_num, :] = self.deme_list[d_num].growth_rate_list
                 num_times_recorded += 1
 
+            #TODO: This should be done stochastically for each deme! i.e. a stochastic life cycle or something.
+
             # Reproduce
             self.reproduce_line(r)
 
@@ -591,8 +601,7 @@ cdef class Simulate_Deme_Line:
                     self.swap_with_neighbors(r)
                     num_times_swapped += 1
 
-        # Check that gene frequencies are correct!
-
+        # Check that gene frequencies are correct if debugging.
         cdef long num_correct = 0
         if self.debug:
             for d in self.deme_list:
@@ -609,7 +618,60 @@ cdef class Simulate_Deme_Line:
         # DONE! Deallocate as necessary.
         gsl_rng_free(r)
 
-    ####### Utility Classes #######
+    ####### Classes to get simulation history ####
+    def get_allele_history(Simulate_Deme_Line self, long allele_num):
+
+        history = np.asarray(self.history)
+        fractional_history = history/float(self.num_individuals)
+
+        num_entries = len(self.frac_gen)
+
+        pixels = np.empty((num_entries, self.num_demes))
+
+        cdef int i
+
+        for i in range(num_entries):
+            pixels[i, :] = fractional_history[i, :, allele_num]
+
+        return pixels
+
+    def get_fitness_history(Simulate_Deme_Line self):
+        fit = np.array(self.fitness_history)
+        return fit.mean(axis=2)
+
+    def get_color_array(Simulate_Deme_Line self):
+
+        cmap = plt.get_cmap('gist_rainbow')
+        cmap.N = self.num_alleles
+
+        # Hue will not be taken into account
+        color_array = cmap(np.linspace(0, 1, self.num_alleles))
+
+        alleleList = []
+        for i in range(self.num_alleles):
+            alleleList.append(self.get_allele_history(i))
+
+        image = np.zeros((alleleList[0].shape[0], alleleList[0].shape[1], 4))
+
+        for i in range(self.num_alleles):
+            currentAllele = alleleList[i]
+
+            redArray = currentAllele * color_array[i, 0]
+            greenArray = currentAllele * color_array[i, 1]
+            blueArray = currentAllele * color_array[i, 2]
+            aArray = currentAllele * color_array[i, 3]
+
+            image[:, :, 0] += redArray
+            image[:, :, 1] += greenArray
+            image[:, :, 2] += blueArray
+            image[:, :, 3] += aArray
+
+        #There is likely a faster way to do this involving the history, and multiplying it by cmap or something
+
+        return image
+
+
+    ####### Not sure if they work below...lol #######
 
     def count_sectors(Simulate_Deme_Line self, double cutoff = 0.1):
         '''Run this after the simulation has concluded to count the number of sectors'''
@@ -678,57 +740,6 @@ cdef class Simulate_Deme_Line:
 
         return animation.FuncAnimation(fig, animate_frame, blit=True, init_func = init,
                                        frames=num_frames, interval=interval)
-
-    def get_allele_history(Simulate_Deme_Line self, long allele_num):
-
-        history = np.asarray(self.history)
-        fractional_history = history/float(self.num_individuals)
-
-        num_entries = len(self.frac_gen)
-
-        pixels = np.empty((num_entries, self.num_demes))
-
-        cdef int i
-
-        for i in range(num_entries):
-            pixels[i, :] = fractional_history[i, :, allele_num]
-
-        return pixels
-
-    def get_fitness_history(Simulate_Deme_Line self):
-        fit = np.array(self.fitness_history)
-        return fit.mean(axis=2)
-
-    def get_color_array(Simulate_Deme_Line self):
-
-        cmap = plt.get_cmap('gist_rainbow')
-        cmap.N = self.num_alleles
-
-        # Hue will not be taken into account
-        color_array = cmap(np.linspace(0, 1, self.num_alleles))
-
-        alleleList = []
-        for i in range(self.num_alleles):
-            alleleList.append(self.get_allele_history(i))
-
-        image = np.zeros((alleleList[0].shape[0], alleleList[0].shape[1], 4))
-
-        for i in range(self.num_alleles):
-            currentAllele = alleleList[i]
-
-            redArray = currentAllele * color_array[i, 0]
-            greenArray = currentAllele * color_array[i, 1]
-            blueArray = currentAllele * color_array[i, 2]
-            aArray = currentAllele * color_array[i, 3]
-
-            image[:, :, 0] += redArray
-            image[:, :, 1] += greenArray
-            image[:, :, 2] += blueArray
-            image[:, :, 3] += aArray
-
-        #There is likely a faster way to do this involving the history, and multiplying it by cmap or something
-
-        return image
 
     def get_color_array_by_fitness(Simulate_Deme_Line self):
         # We just have to cycle through the history and calculate the average selective advantage
