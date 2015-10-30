@@ -209,7 +209,8 @@ cdef class Selection_Deme(Deme):
     def __init__(Selection_Deme self, *args, **kwargs):
         Deme.__init__(self, *args, **kwargs)
 
-    # The only thing we have to update is the reproduce/die weighting function with selection
+    # The only thing we have to update is the reproduce/die weighting function with selection.
+    # No increased chance to die based on growth rate.
     cdef unsigned long int get_reproduce(Selection_Deme self, gsl_rng *r):
         """
         Choose an individual to reproduce based on their growth rates. Faster growing individuals have a higher
@@ -238,17 +239,23 @@ cdef class Selection_Deme(Deme):
         print 'Returning -1...something bad is going to happen.'
         return -1
 
-    # There is no increased probability to die in this model; don't have to adjust that
-
 cdef class Selection_Ratchet_Deme(Selection_Deme):
-    '''The mutation probability is the probability to have a mutation per birth'''
+    """
+    Implements deleterious mutations with a probability of "mutation_probability" per generation. s is the factor that
+    is multiplied by your current growth rate when you suffer a deleterious mutation. Used to study mueller's ratchet.
+    """
     cdef:
-        readonly double mutation_probability
-        readonly double s
-        readonly double mutations_per_iteration
-        readonly double mutation_remainder
-        readonly double mutation_count
-        readonly double min_s
+        #### Inputs ####
+        readonly double mutation_probability    # The probability per generation to suffer a deleterious mutation
+        readonly double s                       # The factor that your fitness is multiplied by when you suffer a deleterious mutation.
+        ################
+
+        #### Other attributes ####
+        readonly double mutations_per_iteration # On average, how many mutations we expect per iteration
+        readonly double mutation_remainder      # Important counter in order to implement the correct number of mutations per iteration
+        readonly double mutation_count          # The number of mutations that have accumulated
+        readonly double min_s                   # The minimum fitness at which to stop decrementing growth rate.
+        ##########################
 
     def __init__(Selection_Ratchet_Deme self, *args, mutation_probability = 0.1, s=0.01, min_s = 10.**-300., **kwargs):
         Selection_Deme.__init__(self, *args, **kwargs)
@@ -260,9 +267,14 @@ cdef class Selection_Ratchet_Deme(Selection_Deme):
         self.mutation_remainder = 0
         self.mutation_count = 0
 
-    # We need to add mutation to the
-    cdef reproduce_die_step(Selection_Ratchet_Deme self, gsl_rng *r):
-        # Reproduce and die as usual.'''
+    cdef void reproduce_die_step(Selection_Ratchet_Deme self, gsl_rng *r):
+        """
+        Reproduce an die as usual, but potentially acquire deleterious mutations.
+
+        :param r: from cython_gsl, random number generator. Used for fast random number generation.
+        """
+
+        # Reproduce and die as usual.
         Selection_Deme.reproduce_die_step(self, r)
         # Now implement mutation: assume at most one mutation per birth for now
         cdef double roll = gsl_rng_uniform(r)
@@ -271,8 +283,12 @@ cdef class Selection_Ratchet_Deme(Selection_Deme):
             self.mutate(r)
             self.mutation_count += 1
 
-    cdef mutate(Selection_Ratchet_Deme self, gsl_rng *r):
-        '''Choose the individual that replaced the one who died to mutate.'''
+    cdef void mutate(Selection_Ratchet_Deme self, gsl_rng *r):
+        """
+        Mutate the last individual that was born.
+
+        :param r: from cython_gsl, random number generator. Used for fast random number generation.
+        """
         cdef unsigned int index_to_mutate = self.last_index_to_die
 
         # Update the individual and the selection list
@@ -283,20 +299,31 @@ cdef class Selection_Ratchet_Deme(Selection_Deme):
         self.growth_rate_list[index_to_mutate] = member_to_mutate.growth_rate
 
 cdef class Simulate_Deme:
+    """
+    Responsible for simulating a single deme.
+    """
+
+    #### Inputs ####
     cdef readonly Deme deme
     cdef readonly long num_generations
-    cdef readonly unsigned long int seed
+    cdef readonly unsigned long int seed        # Seed for the simulations. Must be between 0 and 2**32 - 1
+    cdef readonly double record_every_fracgen   # How often (per generation) that you want to record
+    ################
 
+    #### Records of the simulation ####
     cdef readonly long[:,:] history
     cdef readonly double[:, :] fitness_history
     cdef readonly double[:] fractional_generation
+    ###################################
+
+    #### Helper attributes ####
     cdef readonly unsigned int num_iterations
-    cdef readonly double record_every_fracgen
     cdef readonly unsigned int record_every
     cdef readonly double cur_gen
+    ###########################
 
     def __init__(Simulate_Deme self, Deme deme, long num_generations,
-                 unsigned long int seed = 0, double record_every_fracgen = -1.0):
+                 unsigned long int seed = 0, double record_every_fracgen = None):
 
         self.cur_gen = 0
         self.deme = deme
@@ -304,8 +331,8 @@ cdef class Simulate_Deme:
         self.seed = seed
         self.record_every_fracgen = record_every_fracgen
 
-        if self.record_every_fracgen == -1.0:
-            self.record_every_fracgen = 1./self.deme.num_individuals
+        if self.record_every_fracgen is None:
+            self.record_every_fracgen = 1.
 
         # Calculate how many iterations you must wait before recording
         self.record_every = int(deme.num_individuals * self.record_every_fracgen)
