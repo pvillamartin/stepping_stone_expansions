@@ -14,3 +14,6 @@ for examples of how to use the code.
 ## Muller's "Mutational Meltdown"
 
 ![Mutational Metldown](https://github.com/btweinstein/stepping_stone_expansions/blob/master/examples/mutational_meltdown.png)
+
+## A single deme (well-mixed population) with different fitnesses
+
