@@ -732,6 +732,7 @@ cdef class Simulate_Deme_Line:
 
         def init():
             line.set_data(x_values, fractional_pieces[:, 0, 0])
+            print 'potato'
             return line,
 
         def animate_frame(i):
