@@ -264,13 +264,14 @@ cdef class Selection_aij_Deme(Selection_Deme):
 
         :param r: from cython_gsl, random number generator. Used for fast random number generation
         """
-
         # Update the fitness array
         cdef long[:] cur_alleles = self.binned_alleles
-        cdef float num_alleles = self.num_alleles
-        cdef float frac_alleles = np.array(cur_alleles)/num_alleles
+        cdef double num_alleles = np.float(self.num_alleles)
+        cdef double[:] frac_alleles = np.asarray(cur_alleles)/num_alleles
 
-        cdef double[:] sum=self.aij.dot(frac_alleles)
+        cdef double[:] sum=np.dot(self.aij,frac_alleles)
+
+        cdef int index
         for index in range(self.num_alleles):
             self.growth_rate_list[index]=self.members[index].growth_rate+sum[index]
 
