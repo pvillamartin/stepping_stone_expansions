@@ -252,7 +252,7 @@ cdef class Selection_aij_Deme(Selection_Deme):
         readonly double[:,:] aij                    #The interaction matrix
 
     def __init__(Selection_aij_Deme self, *args, double[:,:] aij not None, **kwargs):
-        Deme.__init__(self, *args, **kwargs)
+        Selection_Deme.__init__(self, *args, **kwargs)
         self.aij=aij
 
         # Initialize the fitness array
@@ -282,7 +282,7 @@ cdef class Selection_aij_Deme(Selection_Deme):
         :param r: from cython_gsl, random number generator. Used for fast random number generation
         """
 
-        Deme.reproduce_die_step(self, r)
+        Selection_Deme.reproduce_die_step(self, r)
         self.get_fitness()
 
     cdef void swap_members(Selection_aij_Deme self, Deme other, gsl_rng *r):
@@ -293,11 +293,11 @@ cdef class Selection_aij_Deme(Selection_Deme):
         :param r: from cython_gsl, random number generator. Used for fast random number generation.
         """
 
-        Deme.swap_members(self,other,r)
+        Selection_Deme.swap_members(self,other,r)
 
         ## Update fitness
         self.get_fitness()
-        <Selection_aij_Deme> other.get_fitness()
+        (<Selection_aij_Deme>other).get_fitness()
 
 cdef class Selection_Ratchet_Deme(Selection_Deme):
     """
@@ -821,14 +821,26 @@ cdef class Simulate_Deme_Line:
 #     def __init__(Disordered_Diffusion_Deme self, *args, **kwargs):
 #         Deme.__init__(Simulate_Deme_Line self, *args, **kwargs)
 #
-#     for index in range(self.num_demes-1):
-#             rndm_num = gsl_rng_uniform(r)
-#             self.deme_right_walls_height[index] = rndm_num
+#     cdef void swap_with_neighbors(Simulate_Deme_Line self, gsl_rng *r):
+#
+#         double aux_prob_left
+#         double aux_prob_right
+#         int left_neighbor
+#         double selected_deme
+#         double sum_prob
+#     for index in range(self.num_demes):
+#             selected_deme=self.deme_list[index]
+#             self.deme_right_walls_height[selected_deme] = gsl_rng_uniform(r)
 #
 #     for index in range(self.num_demes):
-#             self.deme_prob_jump_right[index] = 1. - rndm_num
+#             selected_deme=self.deme_list[index]
+#             left_neighbor=selected_deme.neighbors[0]
+#             aux_prob_left=1 - self.deme_right_walls_height[left_neighbor]
+#             aux_prob_right=1- self.deme_right_walls_height[selected_deme]
+#             sum_prob=aux_prob_left+aux_prob_right
+#             self.deme_prob_jump_right[selected_deme] = aux_prob_right/sum_prob
 #
-#     cdef void swap_with_neighbors(Disordered_Diffusion_Deme self, gsl_rng *r):
+#     cdef void swap_with_neighbors(Simulate_Deme_Line self, gsl_rng *r):
 #         """
 #         Loops through every deme on the line and randomly chooses a neighbor to swap with. This is a *terrible*
 #         way to do things currently; it would be better if things were replaced with choosing a random deme to swap.
