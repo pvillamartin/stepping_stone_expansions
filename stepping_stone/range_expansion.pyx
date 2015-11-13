@@ -15,6 +15,7 @@ cimport numpy as np
 from libcpp cimport bool
 from matplotlib import animation
 import matplotlib.pyplot as plt
+import math #yes??
 
 from cython_gsl cimport *
 from libc.stdlib cimport free
@@ -296,19 +297,6 @@ cdef class Selection_aij_Deme(Selection_Deme):
         ## Update fitness
         self.get_fitness()
         <Selection_aij_Deme> other.get_fitness()
-
-# cdef class Disordered_Diffusion_Deme(Deme):
-#     """
-#     Implements asymmetric diffusion between demes.
-#     """
-#     cdef:
-#         #Variables
-#         double right_wall_heigh = gsl_rng_uniform(r)
-#         double prob_jump_right= 1 - right_wall_heigh
-#
-#     def __init__(Disordered_Diffusion_Deme self, *args, **kwargs):
-#         Deme.__init__(self, *args, **kwargs)
-
 
 cdef class Selection_Ratchet_Deme(Selection_Deme):
     """
@@ -818,3 +806,72 @@ cdef class Simulate_Deme_Line:
         # at each point. I might have to do this as we go, however...
         print 'Not done yet'
         #TODO Make these plots looking at fitness instead of allele. It is a more robust measure of what is going on.
+
+
+# cdef class Disordered_Diffusion_Deme(Simulate_Deme_Line):
+#     """
+#     Implements asymmetric diffusion between demes.
+#     """
+#     cdef:
+#         #Variables
+#         double Deme[:] deme_right_walls_height
+#         double Deme[:] deme_prob_jump_right
+#
+#     def __init__(Disordered_Diffusion_Deme self, *args, **kwargs):
+#         Deme.__init__(Simulate_Deme_Line self, *args, **kwargs)
+#
+#     for index in range(self.num_demes-1):
+#             rndm_num = gsl_rng_uniform(r)
+#             self.deme_right_walls_height[index] = rndm_num
+#
+#     for index in range(self.num_demes):
+#             self.deme_prob_jump_right[index] = 1. - rndm_num
+#
+#     cdef void swap_with_neighbors(Disordered_Diffusion_Deme self, gsl_rng *r):
+#         """
+#         Loops through every deme on the line and randomly chooses a neighbor to swap with. This is a *terrible*
+#         way to do things currently; it would be better if things were replaced with choosing a random deme to swap.
+#
+#         :param r: from cython_gsl, random number generator. Used for fast random number generation.
+#         """
+#
+#         #TODO: Don't swap every neighbor at once, that is fraught with peril. Probably need a new update step in this simulation...
+#
+#         cdef long[:] swap_order
+#         cdef long swap_index
+#         cdef Deme current_deme
+#         cdef Deme[:] neighbors
+#         cdef Deme n
+#
+#         # Create a permutation
+#         cdef int N = self.num_demes
+#         cdef gsl_permutation * p
+#         p = gsl_permutation_alloc (N)
+#         gsl_permutation_init (p)
+#         gsl_ran_shuffle(r, p.data, N, sizeof(size_t))
+#
+#         cdef:
+#             size_t *p_data = gsl_permutation_data(p)
+#
+#             # Swap between all the neighbors once choosing the order randomly
+#             int i
+#
+#             int self_swap_index, other_swap_index
+#             Deme otherDeme
+#             int num_neighbors
+#
+#             int current_perm_index
+#             int neighbor_choice
+#
+#         for i in range(self.num_demes):
+#             current_perm_index = p_data[i]
+#             current_deme = self.deme_list[current_perm_index]
+#             neighbors = current_deme.neighbors
+#             num_neighbors = neighbors.shape[0]
+#             # Choose a neighbor at random to swap with
+#             neighbor_choice = gsl_rng_uniform_int(r, num_neighbors)
+#             otherDeme = neighbors[neighbor_choice]
+#
+#             current_deme.swap_members(otherDeme, r)
+#
+#         gsl_permutation_free(p)
