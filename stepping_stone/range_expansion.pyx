@@ -249,15 +249,10 @@ cdef class Selection_aij_Deme(Selection_Deme):
     cdef:
         #Inputs
         readonly double[:,:] aij                    #The interaction matrix
-        readonly double a_min                       #Minimum fitness of an allele
 
-        #Others
-        #double[:] fitness                           #Fitness of the different alleles of the deme
-
-    def __init__(Selection_aij_Deme self, *args, double[:,:] aij not None, double a_min=1., **kwargs):
+    def __init__(Selection_aij_Deme self, *args, double[:,:] aij not None, **kwargs):
         Deme.__init__(self, *args, **kwargs)
         self.aij=aij
-        self.a_min=a_min
 
         # Initialize the fitness array
         self.get_fitness()
@@ -271,15 +266,8 @@ cdef class Selection_aij_Deme(Selection_Deme):
 
         # Update the fitness array
         cdef double[:] sum=self.aij.dot(self.binned_alleles/float(self.num_alleles))
-        for index in self.num_alleles:
-            self.growth_rate_list[index]=self.a_min+sum[index]
-
-    #This would be other possibility of doing it related with the previous way.
-    #cdef Individual ind
-    #    temp_growth_list = []
-    #    for ind in self.members:
-    #        temp_growth_list.append(self.fitness[ind.allele_id])
-    #    self.growth_rate_list = np.array(temp_growth_list, dtype = np.double)
+        for index in range(self.num_alleles):
+            self.growth_rate_list[index]=self.members[index].growth_rate+sum[index]
 
     cdef void reproduce_die_step(Selection_aij_Deme self, gsl_rng *r):
         """
@@ -291,51 +279,31 @@ cdef class Selection_aij_Deme(Selection_Deme):
         Selection_Deme.reproduce_die_step(self, r)
         self.get_fitness()
 
-    cdef void swap_members(Selection_aij_Deme self, Deme other, gsl_rng *r):
+    cdef void swap_members(Selection_aij_Deme self, Selection_aij_Deme other, gsl_rng *r):
         """
         Swaps an individual randomly with another deme. Important for subclassing.
 
         :param other: The deme you are going to swap with.
         :param r: from cython_gsl, random number generator. Used for fast random number generation.
         """
-        cdef:
-            int i
 
-            unsigned int self_swap_index = self.get_swap_index(r)
-            unsigned int other_swap_index = other.get_swap_index(r)
-
-            Individual self_swap
-            Individual other_swap
-
-        self_swap = self.members[self_swap_index]
-        other_swap = other.members[other_swap_index]
-
-        ## Update allele array of BOTH demes
-        self.binned_alleles[self_swap.allele_id] -= 1
-        self.binned_alleles[other_swap.allele_id] += 1
-
-        other.binned_alleles[other_swap.allele_id] -= 1
-        other.binned_alleles[self_swap.allele_id] += 1
-
-        ## Update members
-        self.members[self_swap_index] = other_swap
-        other.members[other_swap_index] = self_swap
+        Selection_Deme.swap_members(self,other,r)
 
         ## Update fitness
         self.get_fitness()
         other.get_fitness()
 
-cdef class Disordered_Diffusion_Deme(Deme):
-    """
-    Implements asymmetric diffusion between demes.
-    """
-    cdef:
-        #Variables
-        double right_wall_heigh = gsl_rng_uniform(r)
-        double prob_jump_right= 1 - right_wall_heigh
-
-    def __init__(Disordered_Diffusion_Deme self, *args, **kwargs):
-        Deme.__init__(self, *args, **kwargs)
+# cdef class Disordered_Diffusion_Deme(Deme):
+#     """
+#     Implements asymmetric diffusion between demes.
+#     """
+#     cdef:
+#         #Variables
+#         double right_wall_heigh = gsl_rng_uniform(r)
+#         double prob_jump_right= 1 - right_wall_heigh
+#
+#     def __init__(Disordered_Diffusion_Deme self, *args, **kwargs):
+#         Deme.__init__(self, *args, **kwargs)
 
 
 cdef class Selection_Ratchet_Deme(Selection_Deme):
