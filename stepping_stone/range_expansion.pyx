@@ -265,7 +265,11 @@ cdef class Selection_aij_Deme(Selection_Deme):
         """
 
         # Update the fitness array
-        cdef double[:] sum=self.aij.dot(self.binned_alleles/float(self.num_alleles))
+        cdef long[:] cur_alleles = self.binned_alleles
+        cdef float num_alleles = self.num_alleles
+        cdef float frac_alleles = np.array(cur_alleles)/num_alleles
+
+        cdef double[:] sum=self.aij.dot(frac_alleles)
         for index in range(self.num_alleles):
             self.growth_rate_list[index]=self.members[index].growth_rate+sum[index]
 
@@ -276,10 +280,10 @@ cdef class Selection_aij_Deme(Selection_Deme):
         :param r: from cython_gsl, random number generator. Used for fast random number generation
         """
 
-        Selection_Deme.reproduce_die_step(self, r)
+        Deme.reproduce_die_step(self, r)
         self.get_fitness()
 
-    cdef void swap_members(Selection_aij_Deme self, Selection_aij_Deme other, gsl_rng *r):
+    cdef void swap_members(Selection_aij_Deme self, Deme other, gsl_rng *r):
         """
         Swaps an individual randomly with another deme. Important for subclassing.
 
@@ -287,11 +291,11 @@ cdef class Selection_aij_Deme(Selection_Deme):
         :param r: from cython_gsl, random number generator. Used for fast random number generation.
         """
 
-        Selection_Deme.swap_members(self,other,r)
+        Deme.swap_members(self,other,r)
 
         ## Update fitness
         self.get_fitness()
-        other.get_fitness()
+        <Selection_aij_Deme> other.get_fitness()
 
 # cdef class Disordered_Diffusion_Deme(Deme):
 #     """
