@@ -820,19 +820,21 @@ cdef class Simulate_Deme_Line:
 #
 #     def __init__(Disordered_Diffusion_Deme self, *args, **kwargs):
 #         Deme.__init__(Simulate_Deme_Line self, *args, **kwargs)
+#         self.fix_jum_probabilites()
 #
-#     cdef void swap_with_neighbors(Simulate_Deme_Line self, gsl_rng *r):
+#     cdef void fix_jump_probabilities(Disordered_Diffusion_Deme self, gsl_rng *r):
 #
-#         double aux_prob_left
-#         double aux_prob_right
-#         int left_neighbor
-#         double selected_deme
-#         double sum_prob
-#     for index in range(self.num_demes):
+#         cdef:
+#             double selected_deme
+#             double aux_prob_left
+#             double aux_prob_right
+#             double left_neighbor
+#
+#         for index in range(self.num_demes):
 #             selected_deme=self.deme_list[index]
 #             self.deme_right_walls_height[selected_deme] = gsl_rng_uniform(r)
 #
-#     for index in range(self.num_demes):
+#         for index in range(self.num_demes):
 #             selected_deme=self.deme_list[index]
 #             left_neighbor=selected_deme.neighbors[0]
 #             aux_prob_left=1 - self.deme_right_walls_height[left_neighbor]
@@ -840,7 +842,7 @@ cdef class Simulate_Deme_Line:
 #             sum_prob=aux_prob_left+aux_prob_right
 #             self.deme_prob_jump_right[selected_deme] = aux_prob_right/sum_prob
 #
-#     cdef void swap_with_neighbors(Simulate_Deme_Line self, gsl_rng *r):
+#     cdef void swap_with_neighbors(Disordered_Diffusion_Deme self, gsl_rng *r):
 #         """
 #         Loops through every deme on the line and randomly chooses a neighbor to swap with. This is a *terrible*
 #         way to do things currently; it would be better if things were replaced with choosing a random deme to swap.
@@ -882,7 +884,7 @@ cdef class Simulate_Deme_Line:
 #             neighbors = current_deme.neighbors
 #             num_neighbors = neighbors.shape[0]
 #             # Choose a neighbor at random to swap with
-#             neighbor_choice = gsl_rng_uniform_int(r, num_neighbors)
+#             neighbor_choice = gsl_rng_uniform_int(r, num_neighbors) #Now change this!
 #             otherDeme = neighbors[neighbor_choice]
 #
 #             current_deme.swap_members(otherDeme, r)
