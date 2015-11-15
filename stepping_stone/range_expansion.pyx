@@ -268,12 +268,15 @@ cdef class Selection_aij_Deme(Selection_Deme):
         cdef long[:] cur_alleles = self.binned_alleles
         cdef double num_alleles = np.float(self.num_alleles)
         cdef double[:] frac_alleles = np.asarray(cur_alleles)/num_alleles
-
         cdef double[:] sum=np.dot(self.aij,frac_alleles)
-
         cdef int index
-        for index in range(self.num_alleles):
-            self.growth_rate_list[index]=self.members[index].growth_rate+sum[index]
+        cdef int curr_allele
+        cdef Individual curr_individual
+
+        for index in range(self.num_individuals):
+            curr_individual=self.members[index]
+            curr_allele=curr_individual.allele_id
+            self.growth_rate_list[index]=self.members[index].growth_rate+sum[curr_allele]
 
     cdef void reproduce_die_step(Selection_aij_Deme self, gsl_rng *r):
         """
@@ -293,7 +296,7 @@ cdef class Selection_aij_Deme(Selection_Deme):
         :param r: from cython_gsl, random number generator. Used for fast random number generation.
         """
 
-        Selection_Deme.swap_members(self,other,r)
+        Deme.swap_members(self,other,r)
 
         ## Update fitness
         self.get_fitness()
