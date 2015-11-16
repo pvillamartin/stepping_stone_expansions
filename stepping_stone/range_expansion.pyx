@@ -811,109 +811,113 @@ cdef class Simulate_Deme_Line:
         print 'Not done yet'
         #TODO Make these plots looking at fitness instead of allele. It is a more robust measure of what is going on.
 
-
-cdef class Disordered_Diffusion_Deme(Simulate_Deme_Line):
-    """
-    Implements asymmetric diffusion between demes.
-    """
-    cdef:
-        #Variables
-        Deme[:] deme_right_walls_height
-        Deme[:] deme_prob_jump_right
-        Deme[:] total_prob
-        double disorder_strength
-
-    def __init__(Disordered_Diffusion_Deme self, *args, disorder_strength=0.5, **kwargs):
-        Simulate_Deme_Line.__init__(self, *args, **kwargs)
-        self.disorder_strength=disorder_strength
-        self.fix_jump_probabilites()
-
-    cdef void fix_jump_probabilities(Disordered_Diffusion_Deme self):
-
-        cdef:
-            int selected_deme
-            double aux_prob_left
-            double aux_prob_right
-            int left_neighbor
-            double sum_prob
-
-        # Use fast random number generation in mission critical methods
-        # Make sure to delete this at the end to avoid memory leaks...
-        cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
-
-        # Now set seeds
-        np.random.seed(self.seed)
-        gsl_rng_set(r, self.seed)
-
-        for index in range(self.num_demes):
-            selected_deme=self.deme_list[index]
-            self.deme_right_walls_height[selected_deme] = gsl_rng_uniform(r)*self.disorder_strength
-
-        for index in range(self.num_demes):
-            selected_deme=self.deme_list[index]
-            left_neighbor=selected_deme.neighbors[0]
-            aux_prob_left=1 - self.deme_right_walls_height[left_neighbor]
-            aux_prob_right=1- self.deme_right_walls_height[selected_deme]
-            sum_prob=aux_prob_left+aux_prob_right
-            self.deme_prob_jump_right[selected_deme] = aux_prob_right/sum_prob
-            self.total_prob[selected_deme]=sum_prob/2.
-
-         # DONE! Deallocate as necessary.
-        gsl_rng_free(r)
-
-    cdef void swap_with_neighbors(Disordered_Diffusion_Deme self, gsl_rng *r):
-        """
-        Loops through every deme on the line and randomly chooses a neighbor to swap with. This is a *terrible*
-        way to do things currently; it would be better if things were replaced with choosing a random deme to swap.
-
-        :param r: from cython_gsl, random number generator. Used for fast random number generation.
-        """
-
-        #TODO: Don't swap every neighbor at once, that is fraught with peril. Probably need a new update step in this simulation...
-
-        cdef long[:] swap_order
-        cdef long swap_index
-        cdef Disordered_Diffusion_Deme current_deme
-        #cdef Disordered_Diffusion_Deme other_deme
-        cdef Deme[:] neighbors
-        cdef Deme n
-        cdef randm_num
-
-        # Create a permutation
-        cdef int N = self.num_demes
-        cdef gsl_permutation * p
-        p = gsl_permutation_alloc (N)
-        gsl_permutation_init (p)
-        gsl_ran_shuffle(r, p.data, N, sizeof(size_t))
-
-        cdef:
-            size_t *p_data = gsl_permutation_data(p)
-
-            # Swap between all the neighbors once choosing the order randomly
-            int i
-
-            int self_swap_index, other_swap_index
-            Deme otherDeme
-            int num_neighbors
-
-            int current_perm_index
-            int neighbor_choice
-
-        for i in range(self.num_demes):
-            current_perm_index = p_data[i]
-            current_deme = self.deme_list[current_perm_index]
-            randm_num=gsl_rng_uniform(r)
-            if randm_num<self.total_prob[current_deme]:
-                neighbors = current_deme.neighbors
-                num_neighbors = neighbors.shape[0]
-                # Choose a neighbor at random to swap with
-                randm_num=gsl_rng_uniform(r)
-                if randm_num<self.deme_prob_jump_right[current_deme]:
-                    neighbor_choice = 1 #Just for 1D!!!
-                else:
-                    neighbor_choice = 0 #Just for 1D!!!
-
-                otherDeme = neighbors[neighbor_choice]
-                Deme.swap_members(current_deme,otherDeme, r)
-
-        gsl_permutation_free(p)
+# cdef class Disordered_Diffusion_Deme(Deme):
+#     """
+#     A deme that implements walls between neighbors and so, different jump probabilities between them
+#     """
+#     cdef:
+#         #Variables
+#         double deme_right_walls_height
+#         double deme_prob_jump_right
+#         double total_prob
+#         double disorder_strength
+#
+#     def __init__(Disordered_Diffusion_Deme self, *args, disorder_strength=0.5, **kwargs):
+#         Deme.__init__(self, *args, **kwargs)
+#         self.disorder_strength=disorder_strength
+#         self.fix_jump_probabilites()
+#
+#     cdef void fix_jump_probabilities(Disordered_Diffusion_Deme self):
+#
+#         cdef:
+#             double aux_prob_left
+#             double aux_prob_right
+#             double sum_prob
+#
+#         # Use fast random number generation in mission critical methods
+#         # Make sure to delete this at the end to avoid memory leaks...
+#         cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
+#
+#         # Now set seeds
+#         np.random.seed(self.seed)
+#         gsl_rng_set(r, self.seed)
+#
+#         self.deme_right_walls_height = gsl_rng_uniform(r)*self.disorder_strength
+#
+#         left_neighbor=self.neighbors[0]
+#         aux_prob_left=1 - self.deme_right_walls_height[left_neighbor]
+#         aux_prob_right=1- self.deme_right_walls_height[selected_deme]
+#         sum_prob=aux_prob_left+aux_prob_right
+#         self.deme_prob_jump_right[selected_deme] = aux_prob_right/sum_prob
+#         self.total_prob[selected_deme]=sum_prob/2.
+#
+#          # DONE! Deallocate as necessary.
+#         gsl_rng_free(r)
+#
+#
+# cdef class Disordered_Diffusion_Deme(Simulate_Deme_Line):
+#     """
+#     Implements asymmetric diffusion between demes.
+#     """
+#
+#
+#     def __init__(Disordered_Diffusion_Deme self, *args, **kwargs):
+#         Simulate_Deme_Line.__init__(self, *args, **kwargs)
+#
+#
+#     cdef void swap_with_neighbors(Disordered_Diffusion_Deme self, gsl_rng *r):
+#         """
+#         Loops through every deme on the line and randomly chooses a neighbor to swap with. This is a *terrible*
+#         way to do things currently; it would be better if things were replaced with choosing a random deme to swap.
+#
+#         :param r: from cython_gsl, random number generator. Used for fast random number generation.
+#         """
+#
+#         #TODO: Don't swap every neighbor at once, that is fraught with peril. Probably need a new update step in this simulation...
+#
+#         cdef long[:] swap_order
+#         cdef long swap_index
+#         cdef Disordered_Diffusion_Deme current_deme
+#         #cdef Disordered_Diffusion_Deme other_deme
+#         cdef Deme[:] neighbors
+#         cdef Deme n
+#         cdef double randm_num
+#
+#         # Create a permutation
+#         cdef int N = self.num_demes
+#         cdef gsl_permutation * p
+#         p = gsl_permutation_alloc (N)
+#         gsl_permutation_init (p)
+#         gsl_ran_shuffle(r, p.data, N, sizeof(size_t))
+#
+#         cdef:
+#             size_t *p_data = gsl_permutation_data(p)
+#
+#             # Swap between all the neighbors once choosing the order randomly
+#             int i
+#
+#             int self_swap_index, other_swap_index
+#             Deme otherDeme
+#             int num_neighbors
+#
+#             int current_perm_index
+#             int neighbor_choice
+#
+#         for i in range(self.num_demes):
+#             current_perm_index = p_data[i]
+#             current_deme = self.deme_list[current_perm_index]
+#             randm_num=gsl_rng_uniform(r)
+#             if randm_num<self.total_prob[current_deme]:
+#                 neighbors = current_deme.neighbors
+#                 num_neighbors = neighbors.shape[0]
+#                 # Choose a neighbor at random to swap with
+#                 randm_num=gsl_rng_uniform(r)
+#                 if randm_num<self.deme_prob_jump_right[current_deme]:
+#                     neighbor_choice = 1 #Just for 1D!!!
+#                 else:
+#                     neighbor_choice = 0 #Just for 1D!!!
+#
+#                 otherDeme = neighbors[neighbor_choice]
+#                 Deme.swap_members(current_deme,otherDeme, r)
+#
+#         gsl_permutation_free(p)
