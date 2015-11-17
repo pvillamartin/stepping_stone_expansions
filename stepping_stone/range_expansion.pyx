@@ -250,10 +250,13 @@ cdef class Selection_aij_Deme(Selection_Deme):
     cdef:
         #Inputs
         readonly double[:,:] aij                    #The interaction matrix
+        double[:] rndm_growth_rate
+        double disorder_strenght
 
-    def __init__(Selection_aij_Deme self, *args, double[:,:] aij not None, **kwargs):
+    def __init__(Selection_aij_Deme self, *args, double[:,:] aij not None, double disorder_strenght=0.5, **kwargs):
         Selection_Deme.__init__(self, *args, **kwargs)
         self.aij=aij
+        self.disorder_strenght=disorder_strenght
 
         # Initialize the fitness array
         self.get_fitness()
@@ -273,10 +276,24 @@ cdef class Selection_aij_Deme(Selection_Deme):
         cdef int curr_allele
         cdef Individual curr_individual
 
+        # Use fast random number generation in mission critical methods
+        # Make sure to delete this at the end to avoid memory leaks...
+        cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
+
+        # Now set seeds
+        np.random.seed(self.seed)
+        gsl_rng_set(r, self.seed)
+
+
+        self.rndm_growth_rate = np.zeros(self.num_individuals, dtype=np.double)
+
         for index in range(self.num_individuals):
             curr_individual=self.members[index]
             curr_allele=curr_individual.allele_id
-            self.growth_rate_list[index]=self.members[index].growth_rate+sum[curr_allele]
+            self.rndm_growth_rate[index] = gsl_rng_uniform(r)*self.disorder_strenght
+            self.growth_rate_list[index]=self.members[index].growth_rate+self.rndm_growth_rate[index]+sum[curr_allele]
+        # DONE! Deallocate as necessary.
+        gsl_rng_free(r)
 
     cdef void reproduce_die_step(Selection_aij_Deme self, gsl_rng *r):
         """
