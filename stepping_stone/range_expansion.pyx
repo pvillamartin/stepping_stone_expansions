@@ -1,5 +1,5 @@
 #cython: profile=False
-#cython: boundscheck=False
+#cython: boundscheck=True
 #cython: initializedcheck=False
 #cython: nonecheck=False
 #cython: wraparound=False
@@ -822,13 +822,13 @@ cdef class Disordered_Diffusion_Line(Simulate_Deme_Line):
     cdef:
         #Variables
         double[:] stay_prob
-        double[:] righ_prob
+        double[:] right_prob
         double[:] wall_heights
-        #double alpha
+        double alpha
 
-    def __init__(Disordered_Diffusion_Line self, *args, double[:] wall_heights, **kwargs):
+    def __init__(Disordered_Diffusion_Line self, *args, double alpha=0.5, **kwargs):
         Simulate_Deme_Line.__init__(self, *args, **kwargs)
-        self.wall_heights = wall_heights
+        self.alpha = alpha
         self.fix_prob()
 
     cdef void fix_prob(Disordered_Diffusion_Line self):
@@ -840,6 +840,22 @@ cdef class Disordered_Diffusion_Line(Simulate_Deme_Line):
             double right_aux
             double sum_prob
             double last_deme=self.num_demes-1
+
+        # Use fast random number generation in mission critical methods
+        # Make sure to delete this at the end to avoid memory leaks...
+        cdef gsl_rng *r = gsl_rng_alloc(gsl_rng_mt19937)
+
+        # Now set seeds
+        np.random.seed(self.seed)
+        gsl_rng_set(r, self.seed)
+
+        self.wall_heights = np.zeros(self.num_demes, dtype=np.double)
+        self.stay_prob = np.zeros(self.num_demes, dtype=np.double)
+        self.right_prob = np.zeros(self.num_demes, dtype=np.double)
+
+        for index in range(self.num_demes):
+            self.wall_heights[index]=gsl_rng_uniform(r)*self.alpha
+
 
         for index in range(self.num_demes):
             left_wall=self.wall_heights[index]
@@ -855,6 +871,9 @@ cdef class Disordered_Diffusion_Line(Simulate_Deme_Line):
             self.stay_prob[index]=1./sum_prob
             self.right_prob[index]=right_aux/sum_prob
 
+        # DONE! Deallocate as necessary.
+        gsl_rng_free(r)
+
     cdef void choose_neighbor_and_swap(Disordered_Diffusion_Line self, gsl_rng *r, int current_perm_index):
 
             cdef:
@@ -864,12 +883,13 @@ cdef class Disordered_Diffusion_Line(Simulate_Deme_Line):
                 double move_prob
 
             rand_num=gsl_rng_uniform(r)
+
             move_prob=1-self.stay_prob[current_perm_index]
 
             if rand_num<move_prob:
                 current_deme = self.deme_list[current_perm_index]
                 # Choose a neighbor at random to swap with
-                if rand_num<(self.righ_prob[current_perm_index]+move_prob):
+                if rand_num<(self.right_prob[current_perm_index]+move_prob):
                     otherDeme = current_deme.neighbors[1]
                 else:
                     otherDeme = current_deme.neighbors[0]
